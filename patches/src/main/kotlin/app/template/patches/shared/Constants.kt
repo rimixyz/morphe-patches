@@ -38,6 +38,17 @@ object Constants {
         )
     )
 
+    val COMPATIBILITY_17TRACK = Compatibility(
+        name = "17TRACK",
+        packageName = "yqtrack.app",
+        apkFileType = ApkFileType.APK,
+        appIconColor = 0xFF1878F3.toInt(),
+        targets = listOf(
+            // Version analyzed and confirmed by reverse engineering of the APK.
+            AppTarget(version = "3.1.6896.1")
+        )
+    )
+
     val COMPATIBILITY_EXAMPLE_2 = Compatibility(
         name = "XYZ app",
         packageName = "com.example.app",
