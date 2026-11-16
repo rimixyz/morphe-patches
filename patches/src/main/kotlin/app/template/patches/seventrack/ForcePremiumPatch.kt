@@ -30,7 +30,7 @@ private const val PATCH_USER_MODEL = """
 val forcePremiumPatch = patch(
     name = "Force Premium membership",
     description = "Rewrites the cached user model to Premium level (4020). Unlocks client-side VIP features and hides ads. Requires a fresh install.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_17TRACK)
 

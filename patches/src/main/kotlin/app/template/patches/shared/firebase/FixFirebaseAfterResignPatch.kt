@@ -4,6 +4,7 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.instructions
 import app.morphe.patcher.patch.patch
+import app.template.patches.shared.Constants.COMPATIBILITY_17TRACK
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
@@ -23,8 +24,10 @@ private const val ORIGINAL_CERT_SHA1 = "161C5B8B940B90A6EA64A39333A4B1DF851C391A
 val fixFirebaseAfterResignPatch = patch(
     name = "Fix Firebase after re-signing",
     description = "Restores the original certificate SHA-1 so Firebase Auth (Google login) and push notifications keep working after the APK is re-signed.",
-    default = false,
+    default = true,
 ) {
+    compatibleWith(COMPATIBILITY_17TRACK)
+
     execute {
         // Fix 1: authoritative source of the hash inside FirebaseInstallations.
         // Overriding this method makes every caller receive the original SHA-1.
