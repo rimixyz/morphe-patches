@@ -32,6 +32,26 @@ object SharedPreferencesGetBoolFingerprint : Fingerprint(
     ),
 )
 
+object SharedPreferencesSetStringFingerprint : Fingerprint(
+    definingClass = "Lio/flutter/plugins/sharedpreferences/SharedPreferencesBackend;",
+    name = "setString",
+    returnType = "V",
+    parameters = listOf(
+        "Ljava/lang/String;",
+        "Ljava/lang/String;",
+        "Lio/flutter/plugins/sharedpreferences/SharedPreferencesPigeonOptions;",
+    ),
+    filters = listOf(
+        string("key"),
+        string("value"),
+        string("options"),
+        methodCall(
+            definingClass = "Landroid/content/SharedPreferences\$Editor;",
+            name = "putString",
+        ),
+    ),
+)
+
 object SharedPreferencesGetStringFingerprint : Fingerprint(
     definingClass = "Lio/flutter/plugins/sharedpreferences/SharedPreferencesBackend;",
     name = "getString",
