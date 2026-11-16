@@ -14,16 +14,22 @@ private const val EXTENSION_CLASS = "Lapp/template/extension/extension/UserModel
  * rewritten by the extension BEFORE the original method stores it. Every other
  * key falls through untouched, so the rest of the app behaves identically.
  */
+/**
+ * setString has 5 registers and 4 incoming (this + 3 params), so:
+ *   v0 = free   v1 = this   v2 = key   v3 = value   v4 = options
+ * Using v-registers directly avoids any p-register resolution ambiguity
+ * in the inline smali compiler.
+ */
 private const val PATCH_USER_MODEL = """
-    const-string v0, "$USER_MODEL_KEY"
-    invoke-virtual { p1, v0 }, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
-    move-result v0
-    if-eqz v0, :continue_original
-
-    invoke-static { p2 }, $EXTENSION_CLASS;->patchUserModel(Ljava/lang/String;)Ljava/lang/String;
-    move-result-object p2
-
-    :continue_original
+const-string v0, "$USER_MODEL_KEY"
+invoke-virtual { v2, v0 }, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+move-result v0
+if-eqz v0, :continue_original
+invoke-static { v3 }, $EXTENSION_CLASS;->patchUserModel(Ljava/lang/String;)Ljava/lang/String;
+move-result-object v0
+move-object v3, v0
+:continue_original
+nop
 """
 
 @Suppress("unused")
