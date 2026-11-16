@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/rimixyz/morphe-patches/compare/v1.0.0...v1.1.0) (2026-11-16)
+
+### ✨ New Features
+
+* add 17TRACK force premium membership patch ([be407cf](https://github.com/rimixyz/morphe-patches/commit/be407cfcd76d33fd63c768e3f642b98d06529139))
+
 ## 1.0.0 (2026-11-16)
 
 ### ✨ New Features
