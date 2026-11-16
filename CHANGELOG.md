@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/rimixyz/morphe-patches/compare/v1.2.0...v1.3.0) (2026-11-16)
+
+### ✨ New Features
+
+* add universal spoof install source patch ([a187e25](https://github.com/rimixyz/morphe-patches/commit/a187e25ad63f1d108cddfea13ea40b65e07b672f))
+
 ## [1.2.0](https://github.com/rimixyz/morphe-patches/compare/v1.1.0...v1.2.0) (2026-11-16)
 
 ### ✨ New Features
