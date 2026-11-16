@@ -25,7 +25,7 @@ const-string v0, "$USER_MODEL_KEY"
 invoke-virtual { v2, v0 }, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
 move-result v0
 if-eqz v0, :continue_original
-invoke-static { v3 }, $EXTENSION_CLASS;->patchUserModel(Ljava/lang/String;)Ljava/lang/String;
+invoke-static { v3 }, $EXTENSION_CLASS->patchUserModel(Ljava/lang/String;)Ljava/lang/String;
 move-result-object v0
 move-object v3, v0
 :continue_original
