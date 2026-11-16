@@ -1,3 +1,9 @@
+## [1.3.4](https://github.com/rimixyz/morphe-patches/compare/v1.3.3...v1.3.4) (2026-11-16)
+
+### 🐛 Bug Fixes
+
+* correct extension class reference in premium patch smali ([7d356b1](https://github.com/rimixyz/morphe-patches/commit/7d356b11b10acdb3344fb5cb94a2e4f82899cdd8))
+
 ## [1.3.3](https://github.com/rimixyz/morphe-patches/compare/v1.3.2...v1.3.3) (2026-11-16)
 
 ### 🐛 Bug Fixes
