@@ -23,7 +23,7 @@ private const val ORIGINAL_CERT_SHA1 = "161C5B8B940B90A6EA64A39333A4B1DF851C391A
 val fixFirebaseAfterResignPatch = patch(
     name = "Fix Firebase after re-signing",
     description = "Restores the original certificate SHA-1 so Firebase Auth (Google login) and push notifications keep working after the APK is re-signed.",
-    default = true,
+    default = false,
 ) {
     execute {
         // Fix 1: authoritative source of the hash inside FirebaseInstallations.
