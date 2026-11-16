@@ -1,19 +1,38 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "patches": [
     {
       "name": "Fix Firebase after re-signing",
       "description": "Restores the original certificate SHA-1 so Firebase Auth (Google login) and push notifications keep working after the APK is re-signed.",
-      "default": false,
+      "default": true,
       "category": null,
-      "compatiblePackages": null,
+      "compatiblePackages": [
+        {
+          "packageName": "yqtrack.app",
+          "name": "17TRACK",
+          "description": null,
+          "apkFileType": "APK",
+          "appIconColor": "#1878F3",
+          "signatures": null,
+          "formFactor": "MOBILE",
+          "targets": [
+            {
+              "version": "3.1.6896.1",
+              "versionCodes": null,
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
       "options": []
     },
     {
       "name": "Force Premium membership",
       "description": "Rewrites the cached user model to Premium level (4020). Unlocks client-side VIP features and hides ads. Requires a fresh install.",
-      "default": false,
+      "default": true,
       "category": null,
       "compatiblePackages": [
         {

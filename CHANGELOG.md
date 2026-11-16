@@ -1,3 +1,9 @@
+## [1.3.2](https://github.com/rimixyz/morphe-patches/compare/v1.3.1...v1.3.2) (2026-11-16)
+
+### 🐛 Bug Fixes
+
+* apply premium and Firebase patches by default ([83dbe00](https://github.com/rimixyz/morphe-patches/commit/83dbe00e966e45c8c162d41765a694d26ca08133))
+
 ## [1.3.1](https://github.com/rimixyz/morphe-patches/compare/v1.3.0...v1.3.1) (2026-11-16)
 
 ### 🐛 Bug Fixes
