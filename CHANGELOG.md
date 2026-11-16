@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/rimixyz/morphe-patches/compare/v1.3.0...v1.3.1) (2026-11-16)
+
+### 🐛 Bug Fixes
+
+* remove template example patch and placeholder compatibility ([69eedb6](https://github.com/rimixyz/morphe-patches/commit/69eedb6be57df64b74add6ba9b1cb08a7b1ec331))
+
 ## [1.3.0](https://github.com/rimixyz/morphe-patches/compare/v1.2.0...v1.3.0) (2026-11-16)
 
 ### ✨ New Features
