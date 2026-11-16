@@ -42,7 +42,7 @@ object Constants {
         name = "17TRACK",
         packageName = "yqtrack.app",
         apkFileType = ApkFileType.APK,
-        appIconColor = 0xFF1878F3.toInt(),
+        appIconColor = 0x1878F3,
         targets = listOf(
             // Version analyzed and confirmed by reverse engineering of the APK.
             AppTarget(version = "3.1.6896.1")
