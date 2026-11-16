@@ -1,3 +1,13 @@
+## [1.2.0](https://github.com/rimixyz/morphe-patches/compare/v1.1.0...v1.2.0) (2026-11-16)
+
+### ✨ New Features
+
+* add universal fix for Firebase login after re-signing ([cb400fa](https://github.com/rimixyz/morphe-patches/commit/cb400fa929663d089ca95d040813fa5cbf082e71))
+
+### 🐛 Bug Fixes
+
+* set Firebase patch default to false for universal patches ([30715a2](https://github.com/rimixyz/morphe-patches/commit/30715a214fef348ab07c447c71bc64af4af1f72e))
+
 ## [1.1.0](https://github.com/rimixyz/morphe-patches/compare/v1.0.0...v1.1.0) (2026-11-16)
 
 ### ✨ New Features

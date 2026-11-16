@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "patches": [
     {
       "name": "Example Patch",
@@ -34,6 +34,14 @@
           ]
         }
       ],
+      "options": []
+    },
+    {
+      "name": "Fix Firebase after re-signing",
+      "description": "Restores the original certificate SHA-1 so Firebase Auth (Google login) and push notifications keep working after the APK is re-signed.",
+      "default": false,
+      "category": null,
+      "compatiblePackages": null,
       "options": []
     },
     {
