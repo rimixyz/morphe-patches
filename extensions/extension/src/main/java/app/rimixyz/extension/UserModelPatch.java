@@ -1,4 +1,4 @@
-package app.template.extension.extension;
+package app.rimixyz.extension;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -49,9 +49,7 @@ public final class UserModelPatch {
 
     private static void forceValue(JSONObject obj, String key) throws JSONException {
         Object current = obj.opt(key);
-        if (current instanceof Number) {
-            obj.put(key, PREMIUM_GRADE);
-        } else if (current instanceof String) {
+        if (current instanceof String) {
             obj.put(key, String.valueOf(PREMIUM_GRADE));
         } else {
             obj.put(key, PREMIUM_GRADE);

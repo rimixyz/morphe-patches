@@ -1,20 +1,19 @@
-package app.template.patches.seventrack
+package app.rimixyz.patches.seventrack
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.patch
-import app.template.patches.shared.Constants.COMPATIBILITY_17TRACK
+import app.rimixyz.patches.shared.Constants.COMPATIBILITY_17TRACK
 
 private const val USER_MODEL_KEY = "SHARE_PREFERENCES_USER_MODEL"
-private const val EXTENSION_CLASS = "Lapp/template/extension/extension/UserModelPatch;"
+private const val EXTENSION_CLASS = "Lapp/rimixyz/extension/UserModelPatch;"
 
 /**
  * Injected at index 0 of SharedPreferencesBackend.setString(key, value, options).
  *
- * p1 = key, p2 = value. When the Dart code saves the user model, the value is
- * rewritten by the extension BEFORE the original method stores it. Every other
- * key falls through untouched, so the rest of the app behaves identically.
- */
-/**
+ * When the Dart code saves the user model, the value is rewritten by the
+ * extension BEFORE the original method stores it. Every other key falls through
+ * untouched, so the rest of the app behaves identically.
+ *
  * setString has 5 registers and 4 incoming (this + 3 params), so:
  *   v0 = free   v1 = this   v2 = key   v3 = value   v4 = options
  * Using v-registers directly avoids any p-register resolution ambiguity

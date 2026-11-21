@@ -1,8 +1,8 @@
-package app.template.patches.seventrack
+package app.rimixyz.patches.seventrack
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.patch
-import app.template.patches.shared.Constants.COMPATIBILITY_17TRACK
+import app.rimixyz.patches.shared.Constants.COMPATIBILITY_17TRACK
 
 private const val HIDE_DEALS_CAMPAIGN = "SHARE_PREFERENCES_HIDE_DEALS_CAMPAIGN"
 private const val HIDE_DEALS_TAB = "SHARE_PREFERENCES_HIDE_DEALS_TAB"

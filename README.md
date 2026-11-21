@@ -57,6 +57,9 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 
 ### 🛠️ Building locally
 
+- Requires **Java 21** and GitHub Packages credentials with `read:packages` scope:
+  - Set `GITHUB_ACTOR` and `GITHUB_TOKEN` environment variables, **or**
+  - Add `gpr.user=<username>` and `gpr.key=<token>` to your user-level `~/.gradle/gradle.properties` (never commit tokens to the repository's `gradle.properties`).
 - Run `./gradlew buildAndroid`
 - The built patches `.mpp` file is found in `patches/build/libs/patches-*.mpp`
 - Patch using [Morphe Desktop](https://github.com/MorpheApp/morphe-desktop) like any other patch bundle.

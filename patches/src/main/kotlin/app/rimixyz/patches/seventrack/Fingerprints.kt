@@ -1,4 +1,4 @@
-package app.template.patches.seventrack
+package app.rimixyz.patches.seventrack
 
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.methodCall

@@ -1,10 +1,10 @@
-package app.template.patches.shared.installer
+package app.rimixyz.patches.shared.installer
 
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
-import app.morphe.patcher.patch.bytecodePatch
+import app.morphe.patcher.patch.patch
 import app.morphe.patcher.patch.stringOption
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
@@ -20,8 +20,23 @@ private const val PACKAGE_MANAGER = "Landroid/content/pm/PackageManager;"
 private const val INSTALL_SOURCE_INFO = "Landroid/content/pm/InstallSourceInfo;"
 private const val SESSION_INFO = "Landroid/content/pm/PackageInstaller\$SessionInfo;"
 
-private const val EXTENSION_CLASS = "Lapp/template/extension/extension/InstallSourceHelper;"
+private const val EXTENSION_CLASS = "Lapp/rimixyz/extension/InstallSourceHelper;"
 private const val PACKAGE_SOURCE_STORE = 2
+
+private val INVOKE_VIRTUAL_OPCODES = setOf(Opcode.INVOKE_VIRTUAL, Opcode.INVOKE_VIRTUAL_RANGE)
+
+private val INSTALL_SOURCE_INFO_GETTERS = setOf(
+    "getInitiatingPackageName",
+    "getInstallingPackageName",
+    "getOriginatingPackageName",
+    "getUpdateOwnerPackageName",
+)
+
+private val SESSION_INFO_GETTERS = setOf(
+    "getInstallerPackageName",
+    "getInstallInitiatingPackageName",
+    "getInstallOriginatingPackageName",
+)
 
 private fun Instruction.methodReferenceOrNull(): MethodReference? =
     (this as? ReferenceInstruction)?.reference as? MethodReference
@@ -33,20 +48,11 @@ private fun MethodReference.isInstallerGetter() =
         parameterTypes[0].toString() == "Ljava/lang/String;" &&
         returnType == "Ljava/lang/String;") ||
         (definingClass == INSTALL_SOURCE_INFO &&
-            name in setOf(
-                "getInitiatingPackageName",
-                "getInstallingPackageName",
-                "getOriginatingPackageName",
-                "getUpdateOwnerPackageName",
-            ) &&
+            name in INSTALL_SOURCE_INFO_GETTERS &&
             parameterTypes.isEmpty() &&
             returnType == "Ljava/lang/String;") ||
         (definingClass == SESSION_INFO &&
-            name in setOf(
-                "getInstallerPackageName",
-                "getInstallInitiatingPackageName",
-                "getInstallOriginatingPackageName",
-            ) &&
+            name in SESSION_INFO_GETTERS &&
             parameterTypes.isEmpty() &&
             returnType == "Ljava/lang/String;")
 
@@ -56,10 +62,11 @@ private fun MethodReference.isPackageSourceGetter() =
         parameterTypes.isEmpty() &&
         returnType == "I"
 
-private fun Instruction.isInstallSourceTarget() =
-    opcode in setOf(Opcode.INVOKE_VIRTUAL, Opcode.INVOKE_VIRTUAL_RANGE) &&
-        (methodReferenceOrNull()?.isInstallerGetter() == true ||
-            methodReferenceOrNull()?.isPackageSourceGetter() == true)
+private fun Instruction.isInstallSourceTarget(): Boolean {
+    if (opcode !in INVOKE_VIRTUAL_OPCODES) return false
+    val ref = methodReferenceOrNull() ?: return false
+    return ref.isInstallerGetter() || ref.isPackageSourceGetter()
+}
 
 private fun Method.hasInstallSourceTarget() =
     instructionsOrNull?.any { it.isInstallSourceTarget() } == true
@@ -82,7 +89,7 @@ private val ApplicationOnCreateFingerprint = Fingerprint(
  * binder-level IPackageManager so native/indirect queries also see the spoofed value.
  */
 @Suppress("unused")
-val spoofInstallSourcePatch = bytecodePatch(
+val spoofInstallSourcePatch = patch(
     name = "Spoof install source",
     description = "Makes the app think it was installed from Google Play. Useful when an app blocks features because it detects a sideloaded install.",
     default = false,

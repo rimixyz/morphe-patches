@@ -1,4 +1,4 @@
-package app.template.extension.extension;
+package app.rimixyz.extension;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
