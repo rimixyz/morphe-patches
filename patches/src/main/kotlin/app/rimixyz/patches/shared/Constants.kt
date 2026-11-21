@@ -41,4 +41,19 @@ object Constants {
             AppTarget(version = "4.34", versionCode = 142)
         )
     )
+
+    val COMPATIBILITY_MYTHERAPY = Compatibility(
+        name = "MyTherapy",
+        packageName = "eu.smartpatient.mytherapy",
+        apkFileType = ApkFileType.APKS,
+        appIconColor = 0x0F9D58,
+        signatures = setOf(
+            // SHA-256 do certificado do base.apk analisado (v2/v3, Source Stamp à parte).
+            "3099a23a0569e918f79d43bc144622c245e18e8928f997a9a8c883c9348ed5f7"
+        ),
+        targets = listOf(
+            // APKS analisado: SHA-256 953265d0c5b12b3cc40ac81765acd3c0123b13369b820940352cc865e8a855a2.
+            AppTarget(version = "4.16.2", versionCode = 4016002)
+        )
+    )
 }
