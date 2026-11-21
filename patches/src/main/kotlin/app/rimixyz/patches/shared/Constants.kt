@@ -26,4 +26,19 @@ object Constants {
             AppTarget(version = "2.150.64")
         )
     )
+
+    val COMPATIBILITY_NEWSTARSOCER = Compatibility(
+        name = "New Star Soccer",
+        packageName = "com.newstargames.newstarsoccer",
+        apkFileType = ApkFileType.APKS,
+        appIconColor = 0x1B5E20,
+        signatures = setOf(
+            // SHA-256 do certificado do base.apk analisado (v1/v2/v3 e Source Stamp).
+            "bec73a9ac3f4e7da49ab4f5ecc56fe3162011fe87d6eba0eb6454bd167dd8086"
+        ),
+        targets = listOf(
+            // APKS analisado: SHA-256 bc76b635a3ac82967e6973273485abb27796b67975653ad7827691211bb796c3.
+            AppTarget(version = "4.34", versionCode = 142)
+        )
+    )
 }
