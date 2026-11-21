@@ -24,7 +24,7 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_NEWSTARSOCER
 @Suppress("unused")
 val fixTextInputBackspacePatch = patch(
     name = "Fix text input backspace",
-    description = "Corrige o backspace ao digitar nomes no jogo, usando o teclado interno que possui botão de apagar funcional.",
+    description = "Fixes backspace when typing names in the game by using the in-game keyboard, which has a working delete button.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)

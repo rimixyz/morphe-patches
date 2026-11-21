@@ -37,14 +37,14 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Disable Firebase Analytics](#disable-firebase-analytics) | Desativa a coleta do Firebase Analytics pelo metadado oficial do SDK, preservando notificações push e a interface de consentimento. |  |
-| [Disable Flurry analytics session](#disable-flurry-analytics-session) | Impede a inicialização da sessão do Flurry pelo jogo, sem remover classes do SDK nem alterar o fluxo de consentimento. |  |
-| [Disable Flurry startup measurement](#disable-flurry-startup-measurement) | Impede que o provider do Flurry capture tempo de inicialização e uso de memória, mantendo o componente declarado. |  |
-| [Fix text input backspace](#fix-text-input-backspace) | Corrige o backspace ao digitar nomes no jogo, usando o teclado interno que possui botão de apagar funcional. |  |
-| [Remove in-game promo interstitial](#remove-in-game-promo-interstitial) | Suprime a tela promocional própria do jogo em seus três caminhos de entrada, mantendo a navegação e o retorno à partida. |  |
-| [Remove network interstitial ads](#remove-network-interstitial-ads) | Bloqueia o carregamento e a exibição de intersticiais não recompensados do AdMob e da DT Exchange/Fyber, preservando vídeos recompensados. |  |
-| [Restrict advertising ID](#restrict-advertising-id) | Remove as permissões de GAID e AdServices Ad ID para reduzir o rastreamento publicitário, mantendo Attribution e Topics. |  |
-| [Unlock Pro features](#unlock-pro-features) | Libera Licença Pro, remoção de anúncios, campos/clima e bolas especiais ao fixar as flags locais de licença consultadas pelo jogo. |  |
+| [Disable Firebase Analytics](#disable-firebase-analytics) | Disables Firebase Analytics collection through the SDK's official manifest flag, while keeping push notifications and the consent UI. |  |
+| [Disable Flurry analytics session](#disable-flurry-analytics-session) | Prevents the game from starting a Flurry analytics session without removing SDK classes or changing the consent flow. |  |
+| [Disable Flurry startup measurement](#disable-flurry-startup-measurement) | Stops the Flurry provider from capturing startup time and memory usage while keeping the component declared. |  |
+| [Fix text input backspace](#fix-text-input-backspace) | Fixes backspace when typing names in the game by using the in-game keyboard, which has a working delete button. |  |
+| [Remove in-game promo interstitial](#remove-in-game-promo-interstitial) | Suppresses the game's built-in promo interstitial on all three entry paths while preserving navigation and return to play. |  |
+| [Remove network interstitial ads](#remove-network-interstitial-ads) | Blocks loading and display of non-rewarded interstitials from AdMob and DT Exchange/Fyber while preserving rewarded videos. |  |
+| [Restrict advertising ID](#restrict-advertising-id) | Removes GAID and AdServices Ad ID permissions to reduce ad tracking, while keeping Attribution and Topics. |  |
+| [Unlock Pro features](#unlock-pro-features) | Unlocks the Pro license, ad removal, pitches/weather and special balls by setting the local license flags the game checks. |  |
 
 </details>
 

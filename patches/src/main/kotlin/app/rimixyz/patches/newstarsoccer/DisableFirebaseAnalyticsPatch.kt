@@ -19,7 +19,7 @@ private const val DEACTIVATION_KEY = "firebase_analytics_collection_deactivated"
 @Suppress("unused")
 val disableFirebaseAnalyticsPatch = patch(
     name = "Disable Firebase Analytics",
-    description = "Desativa a coleta do Firebase Analytics pelo metadado oficial do SDK, preservando notificações push e a interface de consentimento.",
+    description = "Disables Firebase Analytics collection through the SDK's official manifest flag, while keeping push notifications and the consent UI.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)

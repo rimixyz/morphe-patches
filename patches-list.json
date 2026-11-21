@@ -4,7 +4,7 @@
   "patches": [
     {
       "name": "Disable Firebase Analytics",
-      "description": "Desativa a coleta do Firebase Analytics pelo metadado oficial do SDK, preservando notificações push e a interface de consentimento.",
+      "description": "Disables Firebase Analytics collection through the SDK's official manifest flag, while keeping push notifications and the consent UI.",
       "default": false,
       "category": null,
       "compatiblePackages": [
@@ -38,7 +38,7 @@
     },
     {
       "name": "Disable Flurry analytics session",
-      "description": "Impede a inicialização da sessão do Flurry pelo jogo, sem remover classes do SDK nem alterar o fluxo de consentimento.",
+      "description": "Prevents the game from starting a Flurry analytics session without removing SDK classes or changing the consent flow.",
       "default": false,
       "category": null,
       "compatiblePackages": [
@@ -72,7 +72,7 @@
     },
     {
       "name": "Disable Flurry startup measurement",
-      "description": "Impede que o provider do Flurry capture tempo de inicialização e uso de memória, mantendo o componente declarado.",
+      "description": "Stops the Flurry provider from capturing startup time and memory usage while keeping the component declared.",
       "default": false,
       "category": null,
       "compatiblePackages": [
@@ -160,7 +160,7 @@
     },
     {
       "name": "Fix text input backspace",
-      "description": "Corrige o backspace ao digitar nomes no jogo, usando o teclado interno que possui botão de apagar funcional.",
+      "description": "Fixes backspace when typing names in the game by using the in-game keyboard, which has a working delete button.",
       "default": true,
       "category": null,
       "compatiblePackages": [
@@ -275,7 +275,7 @@
     },
     {
       "name": "Remove in-game promo interstitial",
-      "description": "Suprime a tela promocional própria do jogo em seus três caminhos de entrada, mantendo a navegação e o retorno à partida.",
+      "description": "Suppresses the game's built-in promo interstitial on all three entry paths while preserving navigation and return to play.",
       "default": false,
       "category": null,
       "compatiblePackages": [
@@ -309,7 +309,7 @@
     },
     {
       "name": "Remove network interstitial ads",
-      "description": "Bloqueia o carregamento e a exibição de intersticiais não recompensados do AdMob e da DT Exchange/Fyber, preservando vídeos recompensados.",
+      "description": "Blocks loading and display of non-rewarded interstitials from AdMob and DT Exchange/Fyber while preserving rewarded videos.",
       "default": false,
       "category": null,
       "compatiblePackages": [
@@ -343,7 +343,7 @@
     },
     {
       "name": "Restrict advertising ID",
-      "description": "Remove as permissões de GAID e AdServices Ad ID para reduzir o rastreamento publicitário, mantendo Attribution e Topics.",
+      "description": "Removes GAID and AdServices Ad ID permissions to reduce ad tracking, while keeping Attribution and Topics.",
       "default": false,
       "category": null,
       "compatiblePackages": [
@@ -429,7 +429,7 @@
     },
     {
       "name": "Unlock Pro features",
-      "description": "Libera Licença Pro, remoção de anúncios, campos/clima e bolas especiais ao fixar as flags locais de licença consultadas pelo jogo.",
+      "description": "Unlocks the Pro license, ad removal, pitches/weather and special balls by setting the local license flags the game checks.",
       "default": false,
       "category": null,
       "compatiblePackages": [

@@ -20,7 +20,7 @@ private const val RETURN_VOID = "return-void"
 @Suppress("unused")
 val removeNetworkInterstitialAdsPatch = patch(
     name = "Remove network interstitial ads",
-    description = "Bloqueia o carregamento e a exibição de intersticiais não recompensados do AdMob e da DT Exchange/Fyber, preservando vídeos recompensados.",
+    description = "Blocks loading and display of non-rewarded interstitials from AdMob and DT Exchange/Fyber while preserving rewarded videos.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)

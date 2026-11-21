@@ -32,7 +32,7 @@ private const val BB = "Lcom/newstargames/newstarsoccer/bb_;"
 @Suppress("unused")
 val unlockProPatch = patch(
     name = "Unlock Pro features",
-    description = "Libera Licença Pro, remoção de anúncios, campos/clima e bolas especiais ao fixar as flags locais de licença consultadas pelo jogo.",
+    description = "Unlocks the Pro license, ad removal, pitches/weather and special balls by setting the local license flags the game checks.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)

@@ -19,7 +19,7 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_NEWSTARSOCER
 @Suppress("unused")
 val disableFlurryStartupMeasurementPatch = patch(
     name = "Disable Flurry startup measurement",
-    description = "Impede que o provider do Flurry capture tempo de inicialização e uso de memória, mantendo o componente declarado.",
+    description = "Stops the Flurry provider from capturing startup time and memory usage while keeping the component declared.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)

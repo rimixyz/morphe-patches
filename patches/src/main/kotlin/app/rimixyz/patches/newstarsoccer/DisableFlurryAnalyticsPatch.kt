@@ -16,7 +16,7 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_NEWSTARSOCER
 @Suppress("unused")
 val disableFlurryAnalyticsPatch = patch(
     name = "Disable Flurry analytics session",
-    description = "Impede a inicialização da sessão do Flurry pelo jogo, sem remover classes do SDK nem alterar o fluxo de consentimento.",
+    description = "Prevents the game from starting a Flurry analytics session without removing SDK classes or changing the consent flow.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)
