@@ -2,6 +2,7 @@ package app.rimixyz.patches.newstarsoccer
 
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.fieldAccess
+import app.morphe.patcher.literal
 import app.morphe.patcher.methodCall
 import app.morphe.patcher.string
 
@@ -37,6 +38,19 @@ internal object ProductRegistryCheckPurchasesFingerprint : Fingerprint(
         fieldAccess(definingClass = PRODUCT_REGISTRY, name = "m_dirty", type = "Z"),
         methodCall(definingClass = "Lcom/newstargames/newstarsoccer/c_TPlayer;", name = "m_SaveGlobalData"),
     ),
+)
+
+/**
+ * Decide entre teclado nativo e teclado interno do jogo para c_TInputBox.
+ * Só os idiomas 10/11/12 usam o interno; para português o nativo é escolhido e o Gboard não
+ * entrega KEYCODE_DEL ao OnKeyListener do motor, quebrando o backspace em campos de nome.
+ */
+internal object RequiresMyKeyboardFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TLocale;",
+    name = "m_RequiresMyKeyboard",
+    returnType = "Z",
+    parameters = listOf("I"),
+    filters = listOf(literal(10), literal(11), literal(12)),
 )
 
 /** Gate local de propriedade: c_GoogleIAPComponent -> GooglePlayBB.HasPurchased. */
