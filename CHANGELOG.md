@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/rimixyz/morphe-patches/compare/v1.3.4...v1.4.0) (2026-11-21)
+
+### ✨ New Features
+
+* add Wrestling Revolution 2.150.64 patches ([05d3e20](https://github.com/rimixyz/morphe-patches/commit/05d3e20c4db53d3d0ee9aebb67c8328ffbf72e18))
+
 ## [1.3.4](https://github.com/rimixyz/morphe-patches/compare/v1.3.3...v1.3.4) (2026-11-16)
 
 ### 🐛 Bug Fixes
