@@ -15,4 +15,15 @@ object Constants {
             AppTarget(version = "3.1.6896.1")
         )
     )
+
+    val COMPATIBILITY_WRESTLINGREVOLUTION = Compatibility(
+        name = "Wrestling Revolution",
+        packageName = "air.WRCareer",
+        apkFileType = ApkFileType.APK,
+        appIconColor = 0xD32F2F,
+        targets = listOf(
+            // Version analyzed and confirmed by reverse engineering of the APK.
+            AppTarget(version = "2.150.64")
+        )
+    )
 }
