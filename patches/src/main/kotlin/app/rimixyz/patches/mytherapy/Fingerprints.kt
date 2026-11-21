@@ -3,6 +3,7 @@ package app.rimixyz.patches.mytherapy
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.fieldAccess
 import app.morphe.patcher.methodCall
+import app.morphe.patcher.string
 
 /**
  * Fingerprints para MyTherapy 4.16.2 / versionCode 4016002 (eu.smartpatient.mytherapy).
@@ -24,6 +25,28 @@ private const val NATIVE_AD_LOADER_COMPANION =
     "Lcom/google/android/libraries/ads/mobile/sdk/nativead/NativeAdLoader\$Companion;"
 private const val AD_VIEW =
     "Lcom/google/android/libraries/ads/mobile/sdk/banner/AdView;"
+private const val HAS_ANALYTICS_CONSENT =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/legalconsentsanddocuments/domain/usecase/HasAnalyticsConsentUseCaseImpl;"
+private const val IS_CONSENT_STORED =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/legalconsentsanddocuments/api/usecase/IsConsentStoredUseCase;"
+private const val IS_CONSENT_ACCEPTED =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/legalconsentsanddocuments/api/usecase/IsConsentAcceptedUseCase;"
+
+/**
+ * Consulta de consentimento de analytics. A string da chave legal e as duas interfaces do
+ * repositório ancoram o método de forma única em classes3.dex.
+ */
+internal object HasAnalyticsConsentFingerprint : Fingerprint(
+    definingClass = HAS_ANALYTICS_CONSENT,
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        string("LEGAL_CONSENT_HEALTH_DATA_ANALYTICS_MYTHERAPY"),
+        methodCall(definingClass = IS_CONSENT_STORED, name = "invoke"),
+        methodCall(definingClass = IS_CONSENT_ACCEPTED, name = "invoke"),
+    ),
+)
 
 /**
  * Carga de anúncio nativo. O corpo chama `MobileAds.isInitialized()`, consulta o cache interno e
