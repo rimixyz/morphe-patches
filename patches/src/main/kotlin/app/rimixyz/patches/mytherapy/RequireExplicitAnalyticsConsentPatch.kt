@@ -17,13 +17,13 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_MYTHERAPY
  * também permanece intacta porque `v5` é redefinido depois de ter servido como marcador de estado.
  *
  * Risco registrado: a ordem entre onboarding, auto-init e primeiros eventos só pode ser medida
- * em aparelho (T4/T5), por isso o patch é opt-in.
+ * em aparelho (T4/T5); o patch vem habilitado por padrão.
  */
 @Suppress("unused")
 val requireExplicitAnalyticsConsentInMyTherapyPatch = patch(
     name = "Require explicit analytics consent in MyTherapy",
     description = "Treats an unregistered analytics consent as opt-out, while preserving recorded acceptance and refusal.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 

@@ -25,7 +25,7 @@ private val ADVERTISING_ID_PERMISSIONS = setOf(
 val restrictAdvertisingIdInMyTherapyPatch = patch(
     name = "Restrict advertising ID in MyTherapy",
     description = "Removes GAID and AdServices Ad ID permissions to reduce ad tracking, keeping attribution, topics and consent untouched.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 

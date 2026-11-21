@@ -20,7 +20,7 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_MYTHERAPY
 val disableCommonAdsInMyTherapyPatch = patch(
     name = "Disable common ads in MyTherapy",
     description = "Stops non-rewarded banner and native ad requests at the load entry points, preserving UMP, interstitial and rewarded flows.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 

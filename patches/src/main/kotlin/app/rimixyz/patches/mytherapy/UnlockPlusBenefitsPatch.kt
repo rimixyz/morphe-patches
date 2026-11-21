@@ -34,7 +34,7 @@ private const val BOXING = "Lkotlin/coroutines/jvm/internal/Boxing;"
 val unlockPlusBenefitsInMyTherapyPatch = patch(
     name = "Unlock Plus benefits in MyTherapy",
     description = "Grants the local Plus state the app reads for ad-free access, extra calendar days and the PDF entry point.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 

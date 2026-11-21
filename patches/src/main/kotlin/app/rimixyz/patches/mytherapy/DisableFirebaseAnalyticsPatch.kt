@@ -22,7 +22,7 @@ private const val DEACTIVATION_KEY = "firebase_analytics_collection_deactivated"
 val disableFirebaseAnalyticsInMyTherapyPatch = patch(
     name = "Disable Firebase Analytics in MyTherapy",
     description = "Disables Firebase Analytics collection through the SDK's official manifest flag, keeping push, remote config and the consent UI.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 

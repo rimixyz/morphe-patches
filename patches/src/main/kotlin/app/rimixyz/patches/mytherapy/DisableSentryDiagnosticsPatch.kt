@@ -15,13 +15,13 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_MYTHERAPY
  *
  * Risco explícito: diagnóstico de falhas, inclusive de lembretes e sincronização, deixa de ser
  * enviado ao Sentry. Crashlytics e UXCam não foram confirmados nesta amostra e não são afetados.
- * Por isso o patch é opt-in e deve ser precedido de medição com dados sintéticos.
+ * Por isso o patch vem habilitado por padrão e deve ser acompanhado de medição com dados sintéticos.
  */
 @Suppress("unused")
 val disableSentryDiagnosticsInMyTherapyPatch = patch(
     name = "Disable Sentry diagnostics in MyTherapy",
     description = "Prevents Sentry initialization at the app's single entry point, without removing its providers or native libraries.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 

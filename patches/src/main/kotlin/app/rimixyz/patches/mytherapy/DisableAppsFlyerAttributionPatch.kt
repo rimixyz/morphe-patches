@@ -13,13 +13,13 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_MYTHERAPY
  *
  * Não toca em deep links, convites, login, `setConsentData`, nem no fluxo de revogação existente.
  * Risco documentado: a inicialização automática por provider/auto-init e os deep links podem
- * depender do start — por isso o patch é opt-in e exige validação em T3/T5 antes de habilitar.
+ * depender do start — o patch vem habilitado por padrão e exige validação em T3/T5.
  */
 @Suppress("unused")
 val disableAppsFlyerAttributionInMyTherapyPatch = patch(
     name = "Disable AppsFlyer attribution in MyTherapy",
     description = "Neutralizes the app's explicit AppsFlyer start while keeping its existing opt-out and consent paths intact.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_MYTHERAPY)
 
