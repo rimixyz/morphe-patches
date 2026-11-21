@@ -67,6 +67,69 @@ internal object StartAppsFlyerFingerprint : Fingerprint(
     ),
 )
 
+private const val GET_ADS_FREE_STATUS =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/usecase/GetAdsFreeProductPurchaseStatusUseCaseImpl;"
+private const val PAYMENT_REPOSITORY_IMPL =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/repository/PaymentRepositoryImpl;"
+private const val HAS_ONE_TIME_PAYMENT =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/usecase/HasUserMadeOneTimePaymentUseCaseImpl;"
+private const val ADS_FREE_STATUS =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/api/model/AdsFreeProductPurchaseStatus;"
+private const val FLOW_KT = "Lkotlinx/coroutines/flow/FlowKt;"
+private const val BOXING = "Lkotlin/coroutines/jvm/internal/Boxing;"
+private const val REFRESH_STATUS =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/api/usecase/RefreshAdsFreeProductPurchaseStatusUseCase;"
+
+/** Produtor do status de compra ad-free consumido pelo árbitro de anúncios e pela UI. */
+internal object GetAdsFreeStatusFingerprint : Fingerprint(
+    definingClass = GET_ADS_FREE_STATUS,
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        methodCall(definingClass = REFRESH_STATUS, name = "invoke"),
+        methodCall(definingClass = FLOW_KT, name = "flow"),
+        methodCall(definingClass = FLOW_KT, name = "distinctUntilChanged"),
+    ),
+)
+
+/** Fluxo de "assinatura ativa" do repositório de pagamentos (campo b). */
+internal object HasActiveSubscriptionFlowFingerprint : Fingerprint(
+    definingClass = PAYMENT_REPOSITORY_IMPL,
+    name = "getHasActiveSubscription",
+    returnType = "Lkotlinx/coroutines/flow/Flow;",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(definingClass = PAYMENT_REPOSITORY_IMPL, name = "b", type = "Lkotlinx/coroutines/flow/Flow;"),
+    ),
+)
+
+/** Fluxo de "acesso vitalício" do repositório de pagamentos (campo c). */
+internal object HasLifetimeAccessFlowFingerprint : Fingerprint(
+    definingClass = PAYMENT_REPOSITORY_IMPL,
+    name = "getHasLifetimeAccess",
+    returnType = "Lkotlinx/coroutines/flow/Flow;",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(definingClass = PAYMENT_REPOSITORY_IMPL, name = "c", type = "Lkotlinx/coroutines/flow/Flow;"),
+    ),
+)
+
+/** Leitura de "já fez pagamento único" a partir da data persistida. */
+internal object HasOneTimePaymentFingerprint : Fingerprint(
+    definingClass = HAS_ONE_TIME_PAYMENT,
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        methodCall(
+            definingClass = "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/settings/OneTimePaymentSettings;",
+            name = "getLastPurchaseDate",
+        ),
+        methodCall(definingClass = BOXING, name = "boxBoolean"),
+    ),
+)
+
 private const val SENTRY_INITIALIZER =
     "Leu/smartpatient/mytherapy/multiplatform/feature/monitoring/AndroidSentryInitializer;"
 private const val SENTRY_CONFIGURATION =
