@@ -1,6 +1,7 @@
 package app.rimixyz.patches.newstarsoccer
 
 import app.morphe.patcher.Fingerprint
+import app.morphe.patcher.fieldAccess
 import app.morphe.patcher.methodCall
 import app.morphe.patcher.string
 
@@ -20,6 +21,23 @@ private const val FYBER = "Lcom/newstargames/newstarsoccer/Fyber;"
 private const val FAKE_INTERSTITIAL = "Lcom/newstargames/newstarsoccer/c_TScreen_FakeInterstitial;"
 private const val BB_FLURRY = "Lcom/newstargames/newstarsoccer/BBFlurry;"
 private const val FLURRY_PROVIDER = "Lcom/flurry/android/agent/FlurryContentProvider;"
+
+private const val PRODUCT_REGISTRY = "Lcom/newstargames/newstarsoccer/c_ProductRegistry;"
+
+/**
+ * Loop de verificação de compras chamado a cada frame por c_GameEngine.p_OnUpdate.
+ * É aqui que as flags locais de licença podem ser fixadas sem depender de resposta da Play.
+ */
+internal object ProductRegistryCheckPurchasesFingerprint : Fingerprint(
+    definingClass = PRODUCT_REGISTRY,
+    name = "m_CheckForPurchases",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(definingClass = PRODUCT_REGISTRY, name = "m_dirty", type = "Z"),
+        methodCall(definingClass = "Lcom/newstargames/newstarsoccer/c_TPlayer;", name = "m_SaveGlobalData"),
+    ),
+)
 
 /** Gate local de propriedade: c_GoogleIAPComponent -> GooglePlayBB.HasPurchased. */
 internal object GoogleIAPHasPurchasedFingerprint : Fingerprint(
@@ -128,5 +146,27 @@ internal object FlurryProviderOnCreateFingerprint : Fingerprint(
     filters = listOf(
         string("performance"),
         string("FlurryContentProvider"),
+    ),
+)
+
+/**
+ * query() do provider. Depois de neutralizar onCreate, os campos `a` (UriMatcher) e `c`
+ * (MatrixCursor) ficam nulos; devolver null aqui elimina qualquer NPE se um consumidor
+ * externo tentar consultar a URI "performance".
+ */
+internal object FlurryProviderQueryFingerprint : Fingerprint(
+    definingClass = FLURRY_PROVIDER,
+    name = "query",
+    returnType = "Landroid/database/Cursor;",
+    parameters = listOf(
+        "Landroid/net/Uri;",
+        "[Ljava/lang/String;",
+        "Ljava/lang/String;",
+        "[Ljava/lang/String;",
+        "Ljava/lang/String;",
+    ),
+    filters = listOf(
+        fieldAccess(definingClass = FLURRY_PROVIDER, name = "a", type = "Landroid/content/UriMatcher;"),
+        methodCall(definingClass = "Landroid/content/UriMatcher;", name = "match"),
     ),
 )
