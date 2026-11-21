@@ -130,6 +130,27 @@ internal object HasOneTimePaymentFingerprint : Fingerprint(
     ),
 )
 
+private const val PAIRIP_LICENSE_CLIENT = "Lcom/pairip/licensecheck/LicenseClient;"
+
+/**
+ * Único ponto de entrada do PairIP no app: a Application declarada no manifesto chama
+ * `checkLicense` em `attachBaseContext`. Não há outros chamadores fora do classes2.dex.
+ */
+internal object PairIpLicenseCheckFingerprint : Fingerprint(
+    definingClass = PAIRIP_LICENSE_CLIENT,
+    name = "checkLicense",
+    returnType = "V",
+    parameters = listOf("Landroid/content/Context;"),
+    filters = listOf(
+        string("LicenseClient"),
+        methodCall(definingClass = PAIRIP_LICENSE_CLIENT, name = "isIsolatedProcess"),
+        methodCall(
+            definingClass = "Lcom/pairip/licensecheck/LicenseClient\$ImmediateTaskExecutor;",
+            name = "run",
+        ),
+    ),
+)
+
 private const val SENTRY_INITIALIZER =
     "Leu/smartpatient/mytherapy/multiplatform/feature/monitoring/AndroidSentryInitializer;"
 private const val SENTRY_CONFIGURATION =
