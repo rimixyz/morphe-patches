@@ -1,3 +1,9 @@
+## [1.5.1](https://github.com/rimixyz/morphe-patches/compare/v1.5.0...v1.5.1) (2026-11-21)
+
+### 🐛 Bug Fixes
+
+* fix text input backspace in New Star Soccer ([cb3df34](https://github.com/rimixyz/morphe-patches/commit/cb3df34d2640b08a1ae076cb4ce10ddeba539770))
+
 ## [1.5.0](https://github.com/rimixyz/morphe-patches/compare/v1.4.0...v1.5.0) (2026-11-21)
 
 ### ✨ New Features
