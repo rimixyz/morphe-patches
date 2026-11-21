@@ -48,6 +48,25 @@ internal object HasAnalyticsConsentFingerprint : Fingerprint(
     ),
 )
 
+private const val START_APPSFLYER =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/attributiontracking/usecase/StartAppsFlyerSdkUseCase;"
+private const val APPSFLYER_LIB = "Lcom/appsflyer/AppsFlyerLib;"
+
+/**
+ * Start explícito do AppsFlyer feito pelo app. As duas chamadas à API oficial (`stop` e `start`)
+ * distinguem este caso de uso do `StopAppsFlyerSdkUseCase`, que só chama `stop`.
+ */
+internal object StartAppsFlyerFingerprint : Fingerprint(
+    definingClass = START_APPSFLYER,
+    name = "invoke",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(definingClass = APPSFLYER_LIB, name = "stop"),
+        methodCall(definingClass = APPSFLYER_LIB, name = "start"),
+    ),
+)
+
 /**
  * Carga de anúncio nativo. O corpo chama `MobileAds.isInitialized()`, consulta o cache interno e
  * termina em `NativeAdLoader.load`. O `clear()` (destruição dos objetos) fica fora deste alvo.
