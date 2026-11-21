@@ -12,8 +12,9 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_NEWSTARSOCER
  * consumidores da URI sem provider — o onCreate retorna true sem registrar nada. Assim o
  * componente permanece disponível e o arranque do jogo não é afetado.
  *
- * Risco: se algum consumidor consultar a URI, receberá um cursor vazio; nenhum consumidor direto
- * foi encontrado no DEX e o caminho do Flurry depende da sessão (bloqueada pelo patch separado).
+ * Endurecimento: nenhum chamador direto da URI "performance" foi encontrado no DEX, mas query()
+ * usa UriMatcher/Cursor que ficariam nulos. O patch também faz query() devolver null, eliminando
+ * o risco de NPE se um consumidor externo tentar consultar o provider.
  */
 @Suppress("unused")
 val disableFlurryStartupMeasurementPatch = patch(
@@ -32,6 +33,16 @@ val disableFlurryStartupMeasurementPatch = patch(
             """
                 const/4 v3, 0x1
                 return v3
+            """.trimIndent(),
+        )
+
+        // query() usa os campos a/c que ficaram nulos. v1 é o parâmetro Uri; devolver null
+        // mantém o contrato do ContentProvider sem risco de NPE em consumidores externos.
+        FlurryProviderQueryFingerprint.method.addInstructions(
+            0,
+            """
+                const/4 v1, 0x0
+                return-object v1
             """.trimIndent(),
         )
     }
