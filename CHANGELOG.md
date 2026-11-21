@@ -1,3 +1,20 @@
+## [1.5.0](https://github.com/rimixyz/morphe-patches/compare/v1.4.0...v1.5.0) (2026-11-21)
+
+### ✨ New Features
+
+* disable Firebase Analytics for New Star Soccer ([92e84ca](https://github.com/rimixyz/morphe-patches/commit/92e84ca961a16343cfb1dee8631fb88a483ccb9a))
+* disable Flurry analytics session for New Star Soccer ([ffe0828](https://github.com/rimixyz/morphe-patches/commit/ffe0828928529fc00078d8793a181dcb2f22dc88))
+* disable Flurry startup measurement for New Star Soccer ([61a9fe0](https://github.com/rimixyz/morphe-patches/commit/61a9fe0cc7d8f3ecd71168499162b2194cdde167))
+* remove in-game promo interstitial for New Star Soccer ([33c60ec](https://github.com/rimixyz/morphe-patches/commit/33c60ec94488fbe0a38e9bdc29cff0e78b5b8f34))
+* remove network interstitial ads for New Star Soccer ([2a4936e](https://github.com/rimixyz/morphe-patches/commit/2a4936e4ec7fe2f1dff9acf32ef85fc883ab4e07))
+* restrict advertising ID for New Star Soccer ([38195f5](https://github.com/rimixyz/morphe-patches/commit/38195f5b592402dfc292dbc2b3885c2746f46d22))
+* unlock pro features for New Star Soccer 4.34 ([31020dc](https://github.com/rimixyz/morphe-patches/commit/31020dcb209bae05da19c5fde5189fb71723c2f8))
+
+### 🐛 Bug Fixes
+
+* grant Pro flags through the real purchase-check loop ([4ebdf51](https://github.com/rimixyz/morphe-patches/commit/4ebdf51cddc27a4455fd4b32f8468df9ad6f21a5))
+* make Flurry provider query safe after no-op onCreate ([c1e4060](https://github.com/rimixyz/morphe-patches/commit/c1e4060adaa71e7df9294c89d0261e1f23b53657))
+
 ## [1.4.0](https://github.com/rimixyz/morphe-patches/compare/v1.3.4...v1.4.0) (2026-11-21)
 
 ### ✨ New Features

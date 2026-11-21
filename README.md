@@ -23,7 +23,30 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.4.0](https://github.com/rimixyz/morphe-patches/releases/tag/v1.4.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;7 patches total
+> **[v1.5.0](https://github.com/rimixyz/morphe-patches/releases/tag/v1.5.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;14 patches total
+<details open>
+<summary>📦 New Star Soccer&nbsp;&nbsp;•&nbsp;&nbsp;7 patches</summary>
+<br>
+
+**Package name:** `com.newstargames.newstarsoccer`
+
+**🎯 Supported versions:**
+
+| 4.34 |
+| :---: |
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Disable Firebase Analytics](#disable-firebase-analytics) | Desativa a coleta do Firebase Analytics pelo metadado oficial do SDK, preservando notificações push e a interface de consentimento. |  |
+| [Disable Flurry analytics session](#disable-flurry-analytics-session) | Impede a inicialização da sessão do Flurry pelo jogo, sem remover classes do SDK nem alterar o fluxo de consentimento. |  |
+| [Disable Flurry startup measurement](#disable-flurry-startup-measurement) | Impede que o provider do Flurry capture tempo de inicialização e uso de memória, mantendo o componente declarado. |  |
+| [Remove in-game promo interstitial](#remove-in-game-promo-interstitial) | Suprime a tela promocional própria do jogo em seus três caminhos de entrada, mantendo a navegação e o retorno à partida. |  |
+| [Remove network interstitial ads](#remove-network-interstitial-ads) | Bloqueia o carregamento e a exibição de intersticiais não recompensados do AdMob e da DT Exchange/Fyber, preservando vídeos recompensados. |  |
+| [Restrict advertising ID](#restrict-advertising-id) | Remove as permissões de GAID e AdServices Ad ID para reduzir o rastreamento publicitário, mantendo Attribution e Topics. |  |
+| [Unlock Pro features](#unlock-pro-features) | Libera Licença Pro, remoção de anúncios, campos/clima e bolas especiais ao fixar as flags locais de licença consultadas pelo jogo. |  |
+
+</details>
+
 <details open>
 <summary>📦 Wrestling Revolution&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
