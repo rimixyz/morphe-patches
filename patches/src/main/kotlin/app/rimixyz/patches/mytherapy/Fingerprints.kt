@@ -67,6 +67,29 @@ internal object StartAppsFlyerFingerprint : Fingerprint(
     ),
 )
 
+private const val SENTRY_INITIALIZER =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/monitoring/AndroidSentryInitializer;"
+private const val SENTRY_CONFIGURATION =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/monitoring/SentryConfiguration;"
+private const val SENTRY_API =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/monitoring/SentryApi;"
+
+/**
+ * Ponto único de inicialização do Sentry no app. O método testa `SentryConfiguration.getEnabled()`
+ * e chama `SentryApi.initWithPlatformOptions`. A configuração de tracing/replay feita em `a(...)`
+ * fica fora deste alvo.
+ */
+internal object SentryInitializeFingerprint : Fingerprint(
+    definingClass = SENTRY_INITIALIZER,
+    name = "initialize",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(definingClass = SENTRY_CONFIGURATION, name = "getEnabled"),
+        methodCall(definingClass = SENTRY_API, name = "initWithPlatformOptions"),
+    ),
+)
+
 /**
  * Carga de anúncio nativo. O corpo chama `MobileAds.isInitialized()`, consulta o cache interno e
  * termina em `NativeAdLoader.load`. O `clear()` (destruição dos objetos) fica fora deste alvo.
