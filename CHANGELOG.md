@@ -1,3 +1,22 @@
+## [1.6.0](https://github.com/rimixyz/morphe-patches/compare/v1.5.1...v1.6.0) (2026-11-22)
+
+### ✨ New Features
+
+* add New Star Soccer backup, retro seasons, replay MP4/GIF export, cloud lock, and QoL patches ([2de5e9b](https://github.com/rimixyz/morphe-patches/commit/2de5e9bc3873d39bdc61ed5f9951be8704db6227))
+* disable AppsFlyer attribution in MyTherapy ([f664da3](https://github.com/rimixyz/morphe-patches/commit/f664da30c7b224b1d7f15e5acadebeea4152835e))
+* disable common banner and native ads in MyTherapy ([29e4808](https://github.com/rimixyz/morphe-patches/commit/29e4808645c0860dc8a4ff192ffff2c5d2da532e))
+* disable Firebase Analytics in MyTherapy ([95514d3](https://github.com/rimixyz/morphe-patches/commit/95514d379588015a9ecb8c7c556c588c018814d0))
+* disable PairIP license check in MyTherapy ([4e2fd8a](https://github.com/rimixyz/morphe-patches/commit/4e2fd8afc3dc7ff82a299761c9859a6ab69ed64f))
+* disable Sentry diagnostics in MyTherapy ([3e4358d](https://github.com/rimixyz/morphe-patches/commit/3e4358d4c191c00f7705d2bbbf8da0738ca1a3eb))
+* require explicit analytics consent in MyTherapy ([ed16441](https://github.com/rimixyz/morphe-patches/commit/ed164415f4bc4f285b164f5411aeec597a2d4c5d))
+* restrict advertising ID in MyTherapy ([a020a2a](https://github.com/rimixyz/morphe-patches/commit/a020a2a27edf80f276e5bb69fb4977dec1f17b25))
+* unlock Plus benefits locally in MyTherapy ([52abd99](https://github.com/rimixyz/morphe-patches/commit/52abd997d32d662e7a428300b49c039787d8336a))
+
+### 🐛 Bug Fixes
+
+* enable all MyTherapy patches by default ([b22eefb](https://github.com/rimixyz/morphe-patches/commit/b22eefbd1fc2739a1e4ddf4f8034ff9e05e05810))
+* enable existing New Star Soccer patches by default ([5e7132c](https://github.com/rimixyz/morphe-patches/commit/5e7132c407339a16840fb2182735e2f6696fbfd0))
+
 ## [1.5.1](https://github.com/rimixyz/morphe-patches/compare/v1.5.0...v1.5.1) (2026-11-21)
 
 ### 🐛 Bug Fixes
