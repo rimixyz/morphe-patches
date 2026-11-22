@@ -60,6 +60,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -1530,16 +1531,20 @@ public final class MyTherapyBackupHelper {
                         + "• Registros importados: " + stats.insertedLogs + "\n"
                         + "• Duplicados ignorados: " + stats.skippedDuplicates + "\n"
                         + "• Itens/medicamentos criados: " + stats.createdItems + "\n"
+                        + "• Tratamentos/lembretes criados: " + stats.createdSchedulers + "\n"
                         + "• Itens já existentes vinculados: " + stats.reusedItems + "\n"
                         + "• Notas importadas: " + stats.insertedNotes + "\n\n"
-                        + "Você pode desfazer esta importação a qualquer momento em \"Reverter última restauração / importação\".",
+                        + "Os medicamentos agora aparecem na aba de Tratamento e podem ser editados normalmente. "
+                        + "Você também pode desfazer em \"Reverter última restauração / importação\".",
                     "MyTherapy Archive import finished!\n\n"
                         + "• Records imported: " + stats.insertedLogs + "\n"
                         + "• Duplicates skipped: " + stats.skippedDuplicates + "\n"
                         + "• New items/medications created: " + stats.createdItems + "\n"
+                        + "• Treatments/schedules created: " + stats.createdSchedulers + "\n"
                         + "• Existing items matched: " + stats.reusedItems + "\n"
                         + "• Notes imported: " + stats.insertedNotes + "\n\n"
-                        + "You can undo this import anytime via \"Revert last restore / import\"."
+                        + "Imported medications now appear in Treatments and can be edited normally. "
+                        + "You can also undo this anytime via \"Revert last restore / import\"."
                 )
             );
             Log.i(TAG, "Cold CSV import committed: inserted=" + stats.insertedLogs
@@ -1610,8 +1615,14 @@ public final class MyTherapyBackupHelper {
         int insertedLogs;
         int skippedDuplicates;
         int createdItems;
+        int createdSchedulers;
         int reusedItems;
         int insertedNotes;
+    }
+
+    private static final class InferredSchedule {
+        String earliestDate;
+        final TreeMap<Long, Double> plannedTimesMsToDose = new TreeMap<>();
     }
 
     private static CsvImportStats importCsvIntoTreatmentDb(File treatmentDb, List<CsvRecord> records) throws Exception {
@@ -1627,7 +1638,30 @@ public final class MyTherapyBackupHelper {
             Map<Long, Long> unitScaleLookup = loadUnitScaleLookup(conn);
             Map<Integer, Long> defaultUnitByType = loadDefaultUnitByType(conn);
 
+            // Pré-agrega horários agendados e data inicial por item para reconstruir schedulers editáveis
+            Map<String, InferredSchedule> inferredByKey = new HashMap<>();
+            for (CsvRecord rec : records) {
+                String cacheKey = rec.eventType + "|" + rec.name.toLowerCase(Locale.ROOT);
+                InferredSchedule inf = inferredByKey.get(cacheKey);
+                if (inf == null) {
+                    inf = new InferredSchedule();
+                    inferredByKey.put(cacheKey, inf);
+                }
+                if (rec.actualDate != null && rec.actualDate.length() >= 10) {
+                    String dayPrefix = rec.actualDate.substring(0, 10);
+                    if (inf.earliestDate == null || dayPrefix.compareTo(inf.earliestDate) < 0) {
+                        inf.earliestDate = dayPrefix;
+                    }
+                }
+                long timeMs = parseTimeOfDayMillis(rec.scheduledDate);
+                if (timeMs >= 0L) {
+                    Double dose = rec.value != null ? rec.value : Double.valueOf(1.0d);
+                    inf.plannedTimesMsToDose.put(timeMs, dose);
+                }
+            }
+
             Map<String, Long> trackableCache = new HashMap<>();
+            Map<String, Long> schedulerCache = new HashMap<>();
             Set<String> countedReused = new HashSet<>();
 
             TimeZone localTz = TimeZone.getDefault();
@@ -1637,6 +1671,10 @@ public final class MyTherapyBackupHelper {
 
             SimpleDateFormat utcFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
             utcFmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+            Date now = new Date();
+            String nowLocalStr = localFmt.format(now);
+            String nowUtcStr = utcFmt.format(now);
 
             for (CsvRecord rec : records) {
                 String cacheKey = rec.eventType + "|" + rec.name.toLowerCase(Locale.ROOT);
@@ -1660,6 +1698,24 @@ public final class MyTherapyBackupHelper {
                     trackableCache.put(cacheKey, trackableId);
                 }
 
+                Long schedulerId = schedulerCache.get(cacheKey);
+                if (schedulerId == null) {
+                    schedulerId = findExistingActiveScheduler(conn, trackableId);
+                    if (schedulerId == null) {
+                        InferredSchedule inf = inferredByKey.get(cacheKey);
+                        schedulerId = insertEditableScheduler(
+                            conn,
+                            trackableId,
+                            inf,
+                            nowLocalStr,
+                            nowUtcStr
+                        );
+                        stats.createdSchedulers++;
+                        backfillOrphanEventLogScheduler(conn, trackableId, schedulerId);
+                    }
+                    schedulerCache.put(cacheKey, schedulerId);
+                }
+
                 if (eventLogExists(conn, trackableId, rec.actualDate)) {
                     stats.skippedDuplicates++;
                     continue;
@@ -1671,6 +1727,7 @@ public final class MyTherapyBackupHelper {
 
                 long eventLogId = insertEventLog(
                     conn,
+                    schedulerId,
                     trackableId,
                     rec.actualDate,
                     utcInstant,
@@ -1918,8 +1975,139 @@ public final class MyTherapyBackupHelper {
         }
     }
 
+    private static Long findExistingActiveScheduler(Object conn, long trackableObjectId) throws Exception {
+        Object stmt = prepareSql(
+            conn,
+            "SELECT id FROM scheduler WHERE trackable_object_id = ? AND is_active = 1 ORDER BY id ASC LIMIT 1"
+        );
+        try {
+            stmtBindLong(stmt, 1, trackableObjectId);
+            if (stmtStep(stmt)) {
+                return stmtGetLong(stmt, 0);
+            }
+            return null;
+        } finally {
+            closeStatement(stmt);
+        }
+    }
+
+    private static long insertEditableScheduler(
+        Object conn,
+        long trackableObjectId,
+        InferredSchedule inferred,
+        String nowLocalStr,
+        String nowUtcStr
+    ) throws Exception {
+        boolean hasTimes = inferred != null && !inferred.plannedTimesMsToDose.isEmpty();
+        int mode = hasTimes ? 1 : 0; // SELECTED_WEEKDAYS=1, AS_NEEDED=0
+        int daysActive = hasTimes ? 1 : 0;
+        String startDate = (inferred != null && inferred.earliestDate != null)
+            ? (inferred.earliestDate + " 00:00:00")
+            : (nowLocalStr.substring(0, 10) + " 00:00:00");
+        String serverId = UUID.randomUUID().toString();
+
+        Object stmt = prepareSql(
+            conn,
+            "INSERT INTO scheduler (server_id, sync_status, parent_server_id, root_server_id, "
+                + "start_date, original_start_date, end_date, is_relative, mode, days_active, "
+                + "days_paused, day_in_cycle, status, is_active, is_editable, intake_advice_type, "
+                + "intake_message, interaction_date, from_barcode, is_critical, trackable_object_id, "
+                + "product, device_creation_date, sub_profile_id) "
+                + "VALUES (?, 0, NULL, ?, ?, ?, NULL, 0, ?, ?, 0, 0, 'DEFAULT', 1, 1, 0, NULL, ?, 0, 0, ?, 0, ?, NULL)"
+        );
+        try {
+            stmtBindText(stmt, 1, serverId);
+            stmtBindText(stmt, 2, serverId);
+            stmtBindText(stmt, 3, startDate);
+            stmtBindText(stmt, 4, startDate);
+            stmtBindLong(stmt, 5, mode);
+            stmtBindLong(stmt, 6, daysActive);
+            stmtBindText(stmt, 7, nowUtcStr);
+            stmtBindLong(stmt, 8, trackableObjectId);
+            stmtBindText(stmt, 9, nowLocalStr);
+            stmtStep(stmt);
+        } finally {
+            closeStatement(stmt);
+        }
+
+        long schedulerId = queryLastInsertRowId(conn);
+        if (hasTimes) {
+            int blockOrder = 0;
+            for (Map.Entry<Long, Double> entry : inferred.plannedTimesMsToDose.entrySet()) {
+                insertSchedulerTime(conn, schedulerId, blockOrder++, entry.getKey(), entry.getValue(), 127);
+            }
+        }
+        return schedulerId;
+    }
+
+    private static void insertSchedulerTime(
+        Object conn,
+        long schedulerId,
+        int blockOrder,
+        long plannedTimeMs,
+        Double dose,
+        int activeOnDays
+    ) throws Exception {
+        Object stmt = prepareSql(
+            conn,
+            "INSERT INTO scheduler_time (server_id, scheduler_id, block_order, planned_time, dose, active_on_days) "
+                + "VALUES (?, ?, ?, ?, ?, ?)"
+        );
+        try {
+            stmtBindText(stmt, 1, UUID.randomUUID().toString());
+            stmtBindLong(stmt, 2, schedulerId);
+            stmtBindLong(stmt, 3, blockOrder);
+            stmtBindLong(stmt, 4, plannedTimeMs);
+            if (dose != null) {
+                stmtBindDouble(stmt, 5, dose);
+            } else {
+                stmtBindNull(stmt, 5);
+            }
+            stmtBindLong(stmt, 6, activeOnDays);
+            stmtStep(stmt);
+        } finally {
+            closeStatement(stmt);
+        }
+    }
+
+    private static void backfillOrphanEventLogScheduler(
+        Object conn,
+        long trackableObjectId,
+        long schedulerId
+    ) throws Exception {
+        Object stmt = prepareSql(
+            conn,
+            "UPDATE event_log SET scheduler_id = ? WHERE trackable_object_id = ? AND scheduler_id IS NULL AND is_active = 1"
+        );
+        try {
+            stmtBindLong(stmt, 1, schedulerId);
+            stmtBindLong(stmt, 2, trackableObjectId);
+            stmtStep(stmt);
+        } finally {
+            closeStatement(stmt);
+        }
+    }
+
+    private static long parseTimeOfDayMillis(String normalizedTimestamp) {
+        if (normalizedTimestamp == null || normalizedTimestamp.length() < 19) {
+            return -1L;
+        }
+        try {
+            int hour = Integer.parseInt(normalizedTimestamp.substring(11, 13));
+            int minute = Integer.parseInt(normalizedTimestamp.substring(14, 16));
+            int second = Integer.parseInt(normalizedTimestamp.substring(17, 19));
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+                return -1L;
+            }
+            return ((hour * 3600L) + (minute * 60L) + second) * 1000L;
+        } catch (NumberFormatException ignored) {
+            return -1L;
+        }
+    }
+
     private static long insertEventLog(
         Object conn,
+        Long schedulerId,
         long trackableObjectId,
         String actualDate,
         String utcInstant,
@@ -1932,21 +2120,26 @@ public final class MyTherapyBackupHelper {
             "INSERT INTO event_log (server_id, sync_status, scheduler_id, trackable_object_id, "
                 + "actual_date, interaction_date, device_creation_date, is_active, scheduled_date, "
                 + "status, timezone, external_source, is_editable, product, sub_profile_id, external_id) "
-                + "VALUES (?, 0, NULL, ?, ?, ?, ?, 1, ?, ?, ?, NULL, 1, 0, NULL, NULL)"
+                + "VALUES (?, 0, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL, 1, 0, NULL, NULL)"
         );
         try {
             stmtBindText(stmt, 1, UUID.randomUUID().toString());
-            stmtBindLong(stmt, 2, trackableObjectId);
-            stmtBindText(stmt, 3, actualDate);
-            stmtBindText(stmt, 4, utcInstant);
-            stmtBindText(stmt, 5, utcInstant);
-            if (scheduledDate != null && !scheduledDate.isEmpty()) {
-                stmtBindText(stmt, 6, scheduledDate);
+            if (schedulerId != null) {
+                stmtBindLong(stmt, 2, schedulerId);
             } else {
-                stmtBindNull(stmt, 6);
+                stmtBindNull(stmt, 2);
             }
-            stmtBindLong(stmt, 7, status);
-            stmtBindDouble(stmt, 8, tzHours);
+            stmtBindLong(stmt, 3, trackableObjectId);
+            stmtBindText(stmt, 4, actualDate);
+            stmtBindText(stmt, 5, utcInstant);
+            stmtBindText(stmt, 6, utcInstant);
+            if (scheduledDate != null && !scheduledDate.isEmpty()) {
+                stmtBindText(stmt, 7, scheduledDate);
+            } else {
+                stmtBindNull(stmt, 7);
+            }
+            stmtBindLong(stmt, 8, status);
+            stmtBindDouble(stmt, 9, tzHours);
             stmtStep(stmt);
         } finally {
             closeStatement(stmt);
