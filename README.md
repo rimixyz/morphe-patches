@@ -9,9 +9,6 @@ This is a clean, all-in-one repository for my personal Morphe patches across mul
 > [!NOTE]
 > **100% AI-crafted & tested before release:** Every patch in this repository is 100% created with AI, and is tested until it works properly before being released.
 
-> [!WARNING]
-> These patches are intended for authorized testing and personal use on apps you own or are explicitly allowed to modify. No APK, XAPK, or other app binary is distributed in this repository.
-
 ### How to use these patches
 
 Click the button below, or manually add this repository URL to Morphe Manager: `https://github.com/rimixyz/morphe-patches`
