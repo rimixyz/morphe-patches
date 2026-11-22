@@ -1,3 +1,9 @@
+## [1.6.1](https://github.com/rimixyz/morphe-patches/compare/v1.6.0...v1.6.1) (2026-11-22)
+
+### 🐛 Bug Fixes
+
+* fix VerifyError register out of range and consent branch target in MyTherapy patches ([493bca4](https://github.com/rimixyz/morphe-patches/commit/493bca44af6df0a90aee7f8167d07be90be9d80e))
+
 ## [1.6.0](https://github.com/rimixyz/morphe-patches/compare/v1.5.1...v1.6.0) (2026-11-22)
 
 ### ✨ New Features
