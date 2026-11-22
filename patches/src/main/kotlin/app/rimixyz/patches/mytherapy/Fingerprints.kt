@@ -210,6 +210,87 @@ internal object BannerLoadFingerprint : Fingerprint(
     ),
 )
 
+private const val SHOULD_SHOW_ADS =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/usecase/ShouldShowAdsUseCaseImpl;"
+private const val ARE_ADS_ENABLED =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/api/usecase/AreAdsEnabledUseCase;"
+private const val GET_ADS_FREE_API =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/api/usecase/GetAdsFreeProductPurchaseStatusUseCase;"
+private const val INIT_MOBILE_ADS =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/usecase/InitMobileAdsUseCaseImpl;"
+private const val UPDATE_ADS_CONSENT =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/usecase/UpdateAdsConsentInfoUseCaseImpl;"
+private const val INTERSTITIAL_AD_MANAGER =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/interstatial/AndroidInterstitialAdManagerImpl;"
+private const val REWARDED_AD_MANAGER =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/appmonetization/infrastructure/rewarder/RewardedAdManagerImpl;"
+private const val SESSION_SCOPE =
+    "Leu/smartpatient/mytherapy/multiplatform/lib/core/async/SessionScope;"
+
+/** Árbitro central de exibição de anúncios consumido pela UI (banners, nativos, intersticial e recompensado). */
+internal object ShouldShowAdsFingerprint : Fingerprint(
+    definingClass = SHOULD_SHOW_ADS,
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        methodCall(definingClass = ARE_ADS_ENABLED, name = "invoke"),
+        methodCall(definingClass = GET_ADS_FREE_API, name = "invoke"),
+    ),
+)
+
+/** Ponto único de inicialização do Google Mobile Ads SDK e adaptadores de mediação. */
+internal object InitMobileAdsFingerprint : Fingerprint(
+    definingClass = INIT_MOBILE_ADS,
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        fieldAccess(
+            definingClass = INIT_MOBILE_ADS,
+            name = "g",
+            type = "Ljava/util/concurrent/atomic/AtomicBoolean;",
+        ),
+        methodCall(definingClass = "Ljava/util/concurrent/atomic/AtomicBoolean;", name = "getAndSet"),
+    ),
+)
+
+/** Atualização de consentimento publicitário via Google UMP. */
+internal object UpdateAdsConsentInfoFingerprint : Fingerprint(
+    definingClass = UPDATE_ADS_CONSENT,
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Landroid/app/Activity;", "Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        methodCall(definingClass = "Lcom/google/android/ump/UserMessagingPlatform;", name = "getConsentInformation"),
+        methodCall(definingClass = "Lcom/google/android/ump/ConsentInformation;", name = "requestConsentInfoUpdate"),
+    ),
+)
+
+/** Carga de anúncios intersticiais (tela cheia). */
+internal object InterstitialAdRequestFingerprint : Fingerprint(
+    definingClass = INTERSTITIAL_AD_MANAGER,
+    name = "request",
+    returnType = "V",
+    parameters = listOf(AD_PLACEMENT),
+    filters = listOf(
+        fieldAccess(definingClass = INTERSTITIAL_AD_MANAGER, name = "e", type = "Ljava/util/Map;"),
+        methodCall(definingClass = SESSION_SCOPE, name = "launch\$default"),
+    ),
+)
+
+/** Carga de anúncios recompensados. */
+internal object RewardedAdRequestFingerprint : Fingerprint(
+    definingClass = REWARDED_AD_MANAGER,
+    name = "request",
+    returnType = "V",
+    parameters = listOf(AD_PLACEMENT),
+    filters = listOf(
+        fieldAccess(definingClass = REWARDED_AD_MANAGER, name = "e", type = "Ljava/util/Map;"),
+        methodCall(definingClass = SESSION_SCOPE, name = "launch\$default"),
+    ),
+)
+
 private const val MY_APPLICATION = "Leu/smartpatient/mytherapy/MyApplication;"
 private const val INITIALIZE_CLEVERTAP = "Leu/smartpatient/mytherapy/pushcampaign/InitializeCleverTapKt;"
 private const val ANDROID_ENTRY_POINT_KT =
