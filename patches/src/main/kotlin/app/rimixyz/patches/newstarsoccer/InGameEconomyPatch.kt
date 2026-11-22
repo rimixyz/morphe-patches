@@ -175,6 +175,28 @@ val inGameEconomyPatch = patch(
         val bootCutoffReg = (bootAvail.instructions[bootCutoffIdx] as OneRegisterInstruction).registerA
         bootAvail.replaceInstruction(bootCutoffIdx, "const/16 v$bootCutoffReg, 0x14")
 
+        // 2b. c_Product_Boot.m_RefreshRemoteConfiguration():
+        //     No APK gratuito, Boot_ResellMult_* para Boot_21..26 vem como "None" (ou SKU de IAP),
+        //     pois o jogo esperava c_Product_Boot_Hard. Ao torná-las c_Product_Boot_Soft, o método
+        //     tenta Float.parseFloat("None") e gera NumberFormatException no boot. Mantém os arrays
+        //     m_fuseparam_resellMult (0.0f) e m_fuseparam_resellSKU ("") alocados sem chamar parseFloat.
+        val bootRemoteConfig = ProductBootRefreshRemoteConfigFingerprint.method
+        val configLenIdx = bootRemoteConfig.instructions.indexOfFirst { ins ->
+            ins.opcode == Opcode.INVOKE_VIRTUAL &&
+                ((ins as ReferenceInstruction).reference as? MethodReference)?.let {
+                    it.definingClass == "Ljava/lang/String;" && it.name == "length"
+                } == true
+        }
+        check(configLenIdx >= 0 && configLenIdx + 1 < bootRemoteConfig.instructions.size) {
+            "In-game economy: String.length não encontrado em c_Product_Boot.m_RefreshRemoteConfiguration"
+        }
+        val configLenMove = bootRemoteConfig.instructions[configLenIdx + 1]
+        check(configLenMove.opcode == Opcode.MOVE_RESULT) {
+            "In-game economy: move-result esperado após String.length em m_RefreshRemoteConfiguration"
+        }
+        val configLenReg = (configLenMove as OneRegisterInstruction).registerA
+        bootRemoteConfig.replaceInstruction(configLenIdx + 1, "const/4 v$configLenReg, 0x0")
+
         // 3. c_Product_NRG.m_UpdateAvailability():
         //    Ignora o bloco que desativa NRG_5 e NRG_6 quando a Play Billing não devolve SKUs.
         val nrgAvail = ProductNrgUpdateAvailabilityFingerprint.method

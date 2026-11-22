@@ -678,6 +678,25 @@ internal object ProductBootUpdateAvailabilityFingerprint : Fingerprint(
     ),
 )
 
+/** Leitura da configuração remota de revenda/desconto das chuteiras (Boot_ResellMult_*). */
+internal object ProductBootRefreshRemoteConfigFingerprint : Fingerprint(
+    definingClass = PRODUCT_BOOT,
+    name = "m_RefreshRemoteConfiguration",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        string("Boot_ResellMult_"),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_SocialHub;",
+            name = "p_GetGameConfigurationValue",
+        ),
+        methodCall(
+            definingClass = "Ljava/lang/Float;",
+            name = "parseFloat",
+        ),
+    ),
+)
+
 /** Atualização da disponibilidade dos energéticos (NRG_5, NRG_6, NRG_7). */
 internal object ProductNrgUpdateAvailabilityFingerprint : Fingerprint(
     definingClass = PRODUCT_NRG,
