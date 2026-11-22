@@ -637,3 +637,207 @@ internal object BBAndroidGameOnDrawFrameFingerprint : Fingerprint(
         ),
     ),
 )
+
+private const val SOCCER_PRODUCTS = "Lcom/newstargames/newstarsoccer/c_SoccerProducts;"
+private const val PRODUCT_BOOT = "Lcom/newstargames/newstarsoccer/c_Product_Boot;"
+private const val PRODUCT_NRG = "Lcom/newstargames/newstarsoccer/c_Product_NRG;"
+private const val TPLAYER = "Lcom/newstargames/newstarsoccer/c_TPlayer;"
+private const val BOOT_SHOP_SCREEN = "Lcom/newstargames/newstarsoccer/c_TScreen_BootShop;"
+private const val GAME_MENU_SCREEN = "Lcom/newstargames/newstarsoccer/c_TScreen_GameMenu;"
+private const val AGENT_DETAILS_SCREEN = "Lcom/newstargames/newstarsoccer/c_TScreen_AgentDetails;"
+
+/** Registro inicial de todos os produtos (chuteiras, NRG, agentes, treinadores, bolas). */
+internal object SoccerProductsRegisterProductsFingerprint : Fingerprint(
+    definingClass = SOCCER_PRODUCTS,
+    name = "m_RegisterProducts",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        string("supernrg_1.1"),
+        string("NS-CNTRL_Mk1"),
+        string("NS-SWRV+CNTRL"),
+        methodCall(definingClass = SOCCER_PRODUCTS, name = "m_SetAltPricing"),
+    ),
+)
+
+/** Atualização da disponibilidade das chuteiras (rotação + especiais Boot_21..26). */
+internal object ProductBootUpdateAvailabilityFingerprint : Fingerprint(
+    definingClass = PRODUCT_BOOT,
+    name = "m_UpdateAvailability",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        string("Boot_Popular"),
+        string("Boot_Value"),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_;",
+            name = "g_gPaidVersion",
+            type = "I",
+        ),
+        methodCall(definingClass = PRODUCT_BOOT, name = "m_EnsureBootsAvailability"),
+    ),
+)
+
+/** Atualização da disponibilidade dos energéticos (NRG_5, NRG_6, NRG_7). */
+internal object ProductNrgUpdateAvailabilityFingerprint : Fingerprint(
+    definingClass = PRODUCT_NRG,
+    name = "m_UpdateAvailability",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_;",
+            name = "g_gPaidVersion",
+            type = "I",
+        ),
+        string("NRG_5"),
+        string("NRG_6"),
+        string("NRG_7"),
+    ),
+)
+
+/** Cálculo do preço em Star Bux para contratação de Agentes por tier. */
+internal object PlayerGetPriceAgentFingerprint : Fingerprint(
+    definingClass = TPLAYER,
+    name = "p_GetPriceAgent",
+    returnType = "I",
+    parameters = listOf("I"),
+    filters = listOf(
+        methodCall(definingClass = TPLAYER, name = "p_GetStarLevel"),
+        literal(9999999),
+    ),
+)
+
+/** Cálculo do preço em Star Bux para contratação de Treinadores por tier. */
+internal object PlayerGetPriceTrainerFingerprint : Fingerprint(
+    definingClass = TPLAYER,
+    name = "p_GetPriceTrainer",
+    returnType = "I",
+    parameters = listOf("I"),
+    filters = listOf(
+        methodCall(definingClass = TPLAYER, name = "p_GetStarLevel"),
+        literal(9999999),
+    ),
+)
+
+/** Tratamento de saldo insuficiente em Star Bux (visual moderno e clássico). */
+internal object PlayerNotEnoughCashFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/bb_GSPlayerUtility;",
+    name = "g_GSPlayerNotEnoughCash",
+    returnType = "V",
+    parameters = listOf("I"),
+    filters = listOf(
+        string("BuxShort"),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_ShopOverlay;",
+            name = "m_NotEnoughCash",
+        ),
+        string("CMESSAGE_NOTENOUGHCASHSHORT"),
+        string("splashmessageBux"),
+    ),
+)
+
+/** Despachante de compra na loja (visual moderno via ProductRegistry e clássico por aba). */
+internal object BootShopBuyFingerprint : Fingerprint(
+    definingClass = BOOT_SHOP_SCREEN,
+    name = "m_Buy",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_;",
+            name = "g_gPaidVersion",
+            type = "I",
+        ),
+        string("supernrg_1.1"),
+        string("supernrg_4.1"),
+        methodCall(definingClass = BOOT_SHOP_SCREEN, name = "m_BuyNRG"),
+    ),
+)
+
+/** Botão Agente no menu principal clássico (decide entre tela de 1 agente ou tabela de 3 tiers). */
+internal object GameMenuButtonAgentFingerprint : Fingerprint(
+    definingClass = GAME_MENU_SCREEN,
+    name = "m_ButtonAgent",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(definingClass = AGENT_DETAILS_SCREEN, name = "m_SetUpScreen"),
+        string("com.newstargames.newstarsoccer.topagent_3.1"),
+        string("com.newstargames.newstarsoccer.topagent_1.1"),
+    ),
+)
+
+/** Botão Treinador no menu principal clássico (decide entre tela de 1 treinador ou tabela de 3 tiers). */
+internal object GameMenuButtonTrainerFingerprint : Fingerprint(
+    definingClass = GAME_MENU_SCREEN,
+    name = "m_ButtonTrainer",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(definingClass = AGENT_DETAILS_SCREEN, name = "m_SetUpScreen"),
+        string("com.newstargames.newstarsoccer.trainer_3.1"),
+        string("com.newstargames.newstarsoccer.trainer_1.1"),
+    ),
+)
+
+/** Preenchimento da aba Staff/Bux na loja do visual clássico. */
+internal object BootShopRefreshTableBuxFingerprint : Fingerprint(
+    definingClass = BOOT_SHOP_SCREEN,
+    name = "m_RefreshTableBux",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        string("Agent_2"),
+        string("Agent_3"),
+        string("Trainer_2"),
+        string("Trainer_3"),
+        string("CMESSAGE_NOSHOPCONNECTION"),
+    ),
+)
+
+/** Compra de itens na aba Staff/Bux da loja do visual clássico. */
+internal object BootShopBuyStarBuxFingerprint : Fingerprint(
+    definingClass = BOOT_SHOP_SCREEN,
+    name = "m_BuyStarBux",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(definingClass = TPLAYER, name = "p_HireAgent1"),
+        string("com.newstargames.newstarsoccer.topagent_3.1"),
+        string("com.newstargames.newstarsoccer.topagent_5.1"),
+        string("com.newstargames.newstarsoccer.trainer_3.1"),
+        string("com.newstargames.newstarsoccer.trainer_5.1"),
+    ),
+)
+
+/** Tela de detalhes de Agente/Treinador no visual clássico (mostra benefícios e preço). */
+internal object AgentDetailsSetupScreenFingerprint : Fingerprint(
+    definingClass = AGENT_DETAILS_SCREEN,
+    name = "m_SetUpScreen",
+    returnType = "I",
+    parameters = listOf("I", "I"),
+    filters = listOf(
+        methodCall(definingClass = TPLAYER, name = "p_GetPriceTrainer"),
+        methodCall(definingClass = TPLAYER, name = "p_GetPriceAgent"),
+        string("CMESSAGE_NOSHOPCONNECTION"),
+    ),
+)
+
+/** Botão Contratar na tela de detalhes de Agente/Treinador do visual clássico. */
+internal object AgentDetailsButtonHireFingerprint : Fingerprint(
+    definingClass = AGENT_DETAILS_SCREEN,
+    name = "m_ButtonHire",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        string("iap_Agent1"),
+        string("iap_Trainer1"),
+        fieldAccess(
+            definingClass = AGENT_DETAILS_SCREEN,
+            name = "m_onlinepurchase",
+            type = "Z",
+        ),
+        methodCall(definingClass = BOOT_SHOP_SCREEN, name = "m_BuyStarBux"),
+    ),
+)
