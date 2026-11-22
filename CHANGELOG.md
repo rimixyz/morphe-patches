@@ -3,6 +3,13 @@
 ### 🐛 Bug Fixes
 
 * fix VerifyError register out of range and consent branch target in MyTherapy patches ([493bca4](https://github.com/rimixyz/morphe-patches/commit/493bca44af6df0a90aee7f8167d07be90be9d80e))
+* resolve BBAndroidGame.GetGameView on base class for New Star Soccer replay export ([edee94c](https://github.com/rimixyz/morphe-patches/commit/edee94ca095c4b73a05c2bfc31f16eacad7a5494))
+
+## [1.6.1](https://github.com/rimixyz/morphe-patches/compare/v1.6.0...v1.6.1) (2026-11-22)
+
+### 🐛 Bug Fixes
+
+* fix VerifyError register out of range and consent branch target in MyTherapy patches ([493bca4](https://github.com/rimixyz/morphe-patches/commit/493bca44af6df0a90aee7f8167d07be90be9d80e))
 
 ## [1.6.0](https://github.com/rimixyz/morphe-patches/compare/v1.5.1...v1.6.0) (2026-11-22)
 
