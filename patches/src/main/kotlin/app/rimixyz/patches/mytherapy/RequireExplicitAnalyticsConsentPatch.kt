@@ -1,8 +1,13 @@
 package app.rimixyz.patches.mytherapy
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.instructions
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.patch
 import app.rimixyz.patches.shared.Constants.COMPATIBILITY_MYTHERAPY
+import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 /**
  * Faz o consentimento de analytics exigir uma escolha explícita.
@@ -30,6 +35,22 @@ val requireExplicitAnalyticsConsentInMyTherapyPatch = patch(
     execute {
         verifyMyTherapyTarget()
 
-        HasAnalyticsConsentFingerprint.method.addInstructions(49, "const/4 v5, 0x0")
+        // Substitui a própria instrução-alvo do branch (boxBoolean) por `const/4 v5, 0x0` e
+        // reinsere `boxBoolean` logo em seguida, mantendo o salto `if-eqz v7` apontando para o zero.
+        val invokeMethod = HasAnalyticsConsentFingerprint.method
+        val boxIdx = invokeMethod.instructions.indexOfLast { ins ->
+            ins.opcode == Opcode.INVOKE_STATIC &&
+                ((ins as? ReferenceInstruction)?.reference as? MethodReference)?.let {
+                    it.definingClass == "Lkotlin/coroutines/jvm/internal/Boxing;" && it.name == "boxBoolean"
+                } == true
+        }
+        check(boxIdx > 0) {
+            "Require explicit analytics consent in MyTherapy: chamada Boxing.boxBoolean não encontrada"
+        }
+        invokeMethod.replaceInstruction(boxIdx, "const/4 v5, 0x0")
+        invokeMethod.addInstructions(
+            boxIdx + 1,
+            "invoke-static {v5}, Lkotlin/coroutines/jvm/internal/Boxing;->boxBoolean(Z)Ljava/lang/Boolean;",
+        )
     }
 }

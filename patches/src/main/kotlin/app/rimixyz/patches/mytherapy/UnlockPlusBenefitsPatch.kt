@@ -53,12 +53,12 @@ val unlockPlusBenefitsInMyTherapyPatch = patch(
         )
 
         val trueFlow = """
-            const/4 v1, 0x1
-            invoke-static {v1}, $BOXING->boxBoolean(Z)Ljava/lang/Boolean;
-            move-result-object v1
-            invoke-static {v1}, $FLOW_KT->flowOf(Ljava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
-            move-result-object v1
-            return-object v1
+            const/4 v0, 0x1
+            invoke-static {v0}, $BOXING->boxBoolean(Z)Ljava/lang/Boolean;
+            move-result-object v0
+            invoke-static {v0}, $FLOW_KT->flowOf(Ljava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+            move-result-object v0
+            return-object v0
         """.trimIndent()
         HasActiveSubscriptionFlowFingerprint.method.addInstructions(0, trueFlow)
         HasLifetimeAccessFlowFingerprint.method.addInstructions(0, trueFlow)
