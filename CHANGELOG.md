@@ -1,3 +1,9 @@
+## [1.6.3](https://github.com/rimixyz/morphe-patches/compare/v1.6.2...v1.6.3) (2026-11-22)
+
+### 🐛 Bug Fixes
+
+* prevent boot resell config crash in Convert IAP items to Star Bux ([afe3c5e](https://github.com/rimixyz/morphe-patches/commit/afe3c5eecf7f0a2c261cee9e12bcdc7bdad0ae6c))
+
 ## [1.6.2](https://github.com/rimixyz/morphe-patches/compare/v1.6.1...v1.6.2) (2026-11-22)
 
 ### 🔧 Improvements
