@@ -1495,12 +1495,23 @@ public final class NewStarSoccerReplayHelper {
                 return null;
             }
             if (mtdGetGameView == null) {
-                mtdGetGameView = bbAndroidGame.getClass().getDeclaredMethod("GetGameView");
-                mtdGetGameView.setAccessible(true);
+                Class<?> bbCls = Class.forName(GAME_PKG + "BBAndroidGame");
+                Method m = bbCls.getDeclaredMethod("GetGameView");
+                m.setAccessible(true);
+                mtdGetGameView = m;
             }
             Object v = mtdGetGameView.invoke(bbAndroidGame);
-            return (v instanceof View) ? (View) v : null;
-        } catch (Throwable ignored) {
+            if (v instanceof View) {
+                return (View) v;
+            }
+            // Fallback: leitura direta do campo _view na classe base BBAndroidGame.
+            Class<?> bbCls = Class.forName(GAME_PKG + "BBAndroidGame");
+            Field viewFld = bbCls.getDeclaredField("_view");
+            viewFld.setAccessible(true);
+            Object fv = viewFld.get(bbAndroidGame);
+            return (fv instanceof View) ? (View) fv : null;
+        } catch (Throwable t) {
+            Log.e(TAG, "getGameView failed", t);
             return null;
         }
     }
