@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.6.4",
+  "version": "1.6.5-dev.1",
   "patches": [
     {
       "name": "Convert IAP items to Star Bux",
@@ -583,6 +583,40 @@
                 "ARMEABI_V7A": 142,
                 "X86_64": 142,
                 "X86": 142
+              },
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
+      "name": "Local backup and restore",
+      "description": "Adds a Local Backup & Restore item to Settings to export/restore local .zip backups (with automatic rollback) and import official MyTherapy Archive CSV history.",
+      "default": true,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "eu.smartpatient.mytherapy",
+          "name": "MyTherapy",
+          "description": null,
+          "apkFileType": "APKS",
+          "appIconColor": "#0F9D58",
+          "signatures": [
+            "3099a23a0569e918f79d43bc144622c245e18e8928f997a9a8c883c9348ed5f7"
+          ],
+          "formFactor": "MOBILE",
+          "targets": [
+            {
+              "version": "4.16.2",
+              "versionCodes": {
+                "ARM64_V8A": 4016002,
+                "ARMEABI_V7A": 4016002,
+                "X86_64": 4016002,
+                "X86": 4016002
               },
               "isExperimental": false,
               "minSdk": null,

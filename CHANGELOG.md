@@ -1,3 +1,9 @@
+## [1.6.5-dev.1](https://github.com/rimixyz/morphe-patches/compare/v1.6.4...v1.6.5-dev.1) (2026-11-22)
+
+### 🔧 Improvements
+
+* add local backup, restore, and CSV history import patch for MyTherapy ([44a96e9](https://github.com/rimixyz/morphe-patches/commit/44a96e9d012b40d627dbaefc319bf1f210442a0c))
+
 ## [1.6.4](https://github.com/rimixyz/morphe-patches/compare/v1.6.3...v1.6.4) (2026-11-22)
 
 ### 🐛 Bug Fixes
