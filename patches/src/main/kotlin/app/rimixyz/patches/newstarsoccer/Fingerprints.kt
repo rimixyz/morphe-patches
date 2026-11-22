@@ -184,3 +184,456 @@ internal object FlurryProviderQueryFingerprint : Fingerprint(
         methodCall(definingClass = "Landroid/content/UriMatcher;", name = "match"),
     ),
 )
+
+/** Retorno de Activities externas (usado para interceptar os seletores SAF de backup/restore). */
+internal object AndroidGameOnActivityResultFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/AndroidGame;",
+    name = "onActivityResult",
+    returnType = "V",
+    parameters = listOf("I", "I", "Landroid/content/Intent;"),
+    filters = listOf(
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/BBAndroidGame;",
+            name = "_activityDelegates",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/ActivityDelegate;",
+            name = "onActivityResult",
+        ),
+    ),
+)
+
+/** Despachante central de cliques da UI do motor Monkey (visual moderno e clássico). */
+internal object SiGuiHitGadgetFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/bb_sigui;",
+    name = "g_HitGadget",
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;"),
+    filters = listOf(
+        string("HitGadget: "),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_SaveSlot;",
+            name = "m_ButtonBack",
+        ),
+    ),
+)
+
+/** Montagem programática da tela de slots de carreira (visual clássico). */
+internal object SaveSlotCreateScreenFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_SaveSlot;",
+    name = "m_CreateScreen",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        string("saveslot.btn_Tutorial"),
+        string("saveslot.btn_Network"),
+        string("Slot0Exist"),
+    ),
+)
+
+/** Entrada de criação de nova carreira ao selecionar um slot vazio. */
+internal object PlayerDoNewCareerFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TPlayer;",
+    name = "m_DoNewCareer",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_ChooseClub;",
+            name = "m_SetUpScreen",
+        ),
+        string("help_newplayer"),
+    ),
+)
+
+/** Tela de escolha de clube/país na criação de nova carreira (carrega a base MyData/v*). */
+internal object ChooseClubSetupScreenFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_ChooseClub;",
+    name = "m_SetUpScreen",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        string("TScreen_ChooseClub.SetUpScreen"),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_;",
+            name = "g_gVersion",
+            type = "Ljava/lang/String;",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_;",
+            name = "g_UpdateDatabaseFolder",
+        ),
+    ),
+)
+
+/** Criação efetiva do jogador da nova carreira (grava m_gameversion no slot do save). */
+internal object PlayerCreateFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TPlayer;",
+    name = "m_Create",
+    returnType = "I",
+    parameters = listOf("I", "Ljava/lang/String;", "Ljava/lang/String;", "Ljava/lang/String;", "I", "Z", "Z"),
+    filters = listOf(
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_;",
+            name = "g_gVersion",
+            type = "Ljava/lang/String;",
+        ),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TPlayer;",
+            name = "m_gameversion",
+            type = "Ljava/lang/String;",
+        ),
+    ),
+)
+
+private const val BB_GAME_SERVICE = "Lcom/newstargames/newstarsoccer/BBGameService;"
+private const val SAVE_SLOT_SCREEN = "Lcom/newstargames/newstarsoccer/c_TScreen_SaveSlot;"
+
+/** Tentativa de login no Google Play Games (auto-login na abertura ou clique manual). */
+internal object GameServiceBeginSignInFingerprint : Fingerprint(
+    definingClass = BB_GAME_SERVICE,
+    name = "beginUserSignIn",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/GameHelper;",
+            name = "beginUserInitiatedSignIn",
+        ),
+    ),
+)
+
+/** Reconexão automática do Google Play Games no onStart da Activity. */
+internal object GameServiceOnStartFingerprint : Fingerprint(
+    definingClass = BB_GAME_SERVICE,
+    name = "onStart",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/GameHelper;",
+            name = "onStart",
+        ),
+    ),
+)
+
+/** Desconexão do Google Play Games no onStop da Activity. */
+internal object GameServiceOnStopFingerprint : Fingerprint(
+    definingClass = BB_GAME_SERVICE,
+    name = "onStop",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/GameHelper;",
+            name = "onStop",
+        ),
+    ),
+)
+
+/** Abertura da tela de slots de carreira (exibe/oculta botões do Google Play nos 2 visuais). */
+internal object SaveSlotSetupScreenFingerprint : Fingerprint(
+    definingClass = SAVE_SLOT_SCREEN,
+    name = "m_SetUpScreen",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        string("saveslot"),
+        fieldAccess(
+            definingClass = SAVE_SLOT_SCREEN,
+            name = "m_gadgGooglePlayLogin",
+        ),
+        fieldAccess(
+            definingClass = SAVE_SLOT_SCREEN,
+            name = "m_btn_Network",
+        ),
+    ),
+)
+
+/** Loop de atualização do estado de login do Google Play na tela de slots. */
+internal object SaveSlotUpdateFingerprint : Fingerprint(
+    definingClass = SAVE_SLOT_SCREEN,
+    name = "m_Update",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(
+            definingClass = SAVE_SLOT_SCREEN,
+            name = "m_networkActive",
+            type = "Z",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TNetwork;",
+            name = "p_getLoginState",
+        ),
+    ),
+)
+
+/** Agendamento de notificações locais de retenção quando o app vai para segundo plano. */
+internal object LocalNotifyOnPauseFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_LocalNotifyComponent;",
+    name = "p_OnPause",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_LocalNotification;",
+            name = "p_ScheduleAfter",
+        ),
+    ),
+)
+
+/** Ponte que agenda efetivamente uma notificação local nativa após N segundos. */
+internal object LocalNotificationScheduleAfterFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_LocalNotification;",
+    name = "p_ScheduleAfter",
+    returnType = "V",
+    parameters = listOf("I"),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_LocalNotification;",
+            name = "NativeScheduleAfter",
+        ),
+    ),
+)
+
+/** Abertura da tela de Opções (chamada antes de m_CreateScreen e da ativação de options.uis). */
+internal object OptionsSetupScreenFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_Options;",
+    name = "m_SetUpScreen",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        string("Options Setup Screen"),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_Options;",
+            name = "m_CreateScreen",
+        ),
+        string("options"),
+    ),
+)
+
+private const val CLOUD_CLASS = "Lcom/newstargames/newstarsoccer/c_Cloud;"
+
+/** Inicialização interna da máquina de estados de Cloud / Cohorts / Remote Config. */
+internal object CloudSetupInternalFingerprint : Fingerprint(
+    definingClass = CLOUD_CLASS,
+    name = "m_Setup_Internal",
+    returnType = "V",
+    parameters = listOf(
+        "Ljava/lang/String;",
+        "Ljava/lang/String;",
+        "Lcom/newstargames/newstarsoccer/c_CloudCallbacks;",
+    ),
+    filters = listOf(
+        fieldAccess(
+            definingClass = CLOUD_CLASS,
+            name = "m_localServerPath",
+            type = "Ljava/lang/String;",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/Skn3CheckOnline;",
+            name = "IsOnline",
+        ),
+        fieldAccess(
+            definingClass = CLOUD_CLASS,
+            name = "m_CLD_GetRootConfig",
+            type = "I",
+        ),
+    ),
+)
+
+/** Consulta de overrides de configuração remota (.cnfs) usados por tweaks e localização. */
+internal object CloudHasGameConfigValueFingerprint : Fingerprint(
+    definingClass = CLOUD_CLASS,
+    name = "m_HasGameConfigurationValue",
+    returnType = "Z",
+    parameters = listOf("Ljava/lang/String;"),
+    filters = listOf(
+        fieldAccess(
+            definingClass = CLOUD_CLASS,
+            name = "m_configStrings",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_StringMap3;",
+            name = "p_Contains",
+        ),
+    ),
+)
+
+/** Transição da tela de boot CloudSetup para o menu principal (checa m_mustFinishUpdating). */
+internal object CloudSetupMoveOnToGameFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_CloudSetup;",
+    name = "m_MoveOnToGame",
+    returnType = "I",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(
+            definingClass = CLOUD_CLASS,
+            name = "m_mustFinishUpdating",
+            type = "Z",
+        ),
+        string("MSGINSTANT_SIMONREAD_MUSTFINISHDOWNLOAD"),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TScreen_MainMenu;",
+            name = "m_SetUpScreen",
+        ),
+    ),
+)
+
+/** Carregamento de arquivos remotos pelo serviço de DLC / catálogos. */
+internal object DlcServiceAssetsLoadFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_DLCService;",
+    name = "m_AssetsLoad",
+    returnType = "I",
+    parameters = listOf("[Ljava/lang/String;", "Z"),
+    filters = listOf(
+        string("AssetsLoad: Skip of "),
+        string("AssetsLoad: StartUpdate of "),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_URLCache;",
+            name = "p_StartUpdate",
+        ),
+    ),
+)
+
+/** Disparo de download assíncrono HTTP de um arquivo no cache de URLs do DLC. */
+internal object UrlCacheStartUpdateFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_URLCache;",
+    name = "p_StartUpdate",
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;"),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_AsyncDownload;",
+            name = "m_AsyncDownload_new",
+        ),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_dlcservice;",
+            name = "g_DLC_Loading",
+            type = "I",
+        ),
+    ),
+)
+
+/** Pilha de diretórios de busca de assets (.uis, tweaks, atlas, sons). */
+internal object PathStackAddPathFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_PathStack;",
+    name = "p_AddPath",
+    returnType = "I",
+    parameters = listOf("Ljava/lang/String;"),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_DirectoryCache;",
+            name = "m_DirectoryCache_new",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/bb_data;",
+            name = "g_FixDataPath",
+        ),
+    ),
+)
+
+/** Início do modo replay de um lance na partida (inicializa WatchReplay.*). */
+internal object MatchStartReplayFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+    name = "m_StartReplay",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        string("WatchReplay"),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+            name = "m_twk_ReplaySpeed",
+        ),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+            name = "m_twk_ReplayPaused",
+        ),
+        string("ReplayActive"),
+    ),
+)
+
+/** Atualização quadro a quadro do modo replay (m_matchstate == 10). */
+internal object MatchUpdateReplayFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+    name = "m_UpdateReplay",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TBall;",
+            name = "m_UpdateReplay",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatchPlayer;",
+            name = "m_UpdateReplayAll",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_GSMatchChanceAddons;",
+            name = "m_UpdateReplay",
+        ),
+    ),
+)
+
+/** Decisão de exibir o botão "Assistir Replay" ao fim de um lance. */
+internal object MatchChanceShowWatchReplayFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/c_MatchChance;",
+    name = "m_ShowWatchReplay",
+    returnType = "Z",
+    parameters = emptyList(),
+    filters = listOf(
+        string("ReplaysEnabled"),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+            name = "m_allowReplay",
+            type = "Z",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_MinigameHud;",
+            name = "m_ShowWatchReplay",
+        ),
+    ),
+)
+
+/** Saída do modo replay (botão X ou botão Voltar do Android). */
+internal object MatchEndReplayButtonFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/bb_GSMatchUtility;",
+    name = "g_GSButtonEndReplay",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+            name = "m_watchReplay",
+            type = "Z",
+        ),
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+            name = "m_twk_ReplayActive",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/c_TMatch;",
+            name = "m_EndChance",
+        ),
+    ),
+)
+
+/** Callback OpenGL ES de renderização de quadro do GLSurfaceView. */
+internal object BBAndroidGameOnDrawFrameFingerprint : Fingerprint(
+    definingClass = "Lcom/newstargames/newstarsoccer/BBAndroidGame;",
+    name = "onDrawFrame",
+    returnType = "V",
+    parameters = listOf("Ljavax/microedition/khronos/opengles/GL10;"),
+    filters = listOf(
+        fieldAccess(
+            definingClass = "Lcom/newstargames/newstarsoccer/BBAndroidGame;",
+            name = "_canRender",
+            type = "Z",
+        ),
+        methodCall(
+            definingClass = "Lcom/newstargames/newstarsoccer/BBAndroidGame;",
+            name = "RenderGame",
+        ),
+    ),
+)
