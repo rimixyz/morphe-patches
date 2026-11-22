@@ -1,3 +1,9 @@
+## [1.6.2](https://github.com/rimixyz/morphe-patches/compare/v1.6.1...v1.6.2) (2026-11-22)
+
+### 🔧 Improvements
+
+* convert New Star Soccer IAP consumables and staff into Star Bux in-game economy ([913eb28](https://github.com/rimixyz/morphe-patches/commit/913eb281884e344f84c8db0d92d3edd189b95dde))
+
 ## [1.6.1](https://github.com/rimixyz/morphe-patches/compare/v1.6.0...v1.6.1) (2026-11-22)
 
 ### 🐛 Bug Fixes

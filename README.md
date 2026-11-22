@@ -20,7 +20,39 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.6.1](https://github.com/rimixyz/morphe-patches/releases/tag/v1.6.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;30 patches total
+> **[v1.6.2](https://github.com/rimixyz/morphe-patches/releases/tag/v1.6.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;31 patches total
+<details open>
+<summary>📦 New Star Soccer&nbsp;&nbsp;•&nbsp;&nbsp;16 patches</summary>
+<br>
+
+**Package name:** `com.newstargames.newstarsoccer`
+
+**🎯 Supported versions:**
+
+| 4.34 |
+| :---: |
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Convert IAP items to Star Bux](#convert-iap-items-to-star-bux) | Converts real-money boots, Super NRG drinks, and Pro/Expert agents and trainers into Star Bux purchases in both modern and classic UI, and replaces the dead Buy Bux redirect with an in-game insufficient-funds banner. |  |
+| [Disable Firebase Analytics](#disable-firebase-analytics) | Disables Firebase Analytics collection through the SDK's official manifest flag, while keeping push notifications and the consent UI. |  |
+| [Disable Flurry analytics session](#disable-flurry-analytics-session) | Prevents the game from starting a Flurry analytics session without removing SDK classes or changing the consent flow. |  |
+| [Disable Flurry startup measurement](#disable-flurry-startup-measurement) | Stops the Flurry provider from capturing startup time and memory usage while keeping the component declared. |  |
+| [Disable Google Play Games](#disable-google-play-games) | Disables broken Google Play Games auto-sign-in on re-signed APKs and hides the dead Play Games button on the Career screen (modern and classic UI). |  |
+| [Disable remote config and cloud overrides](#disable-remote-config-and-cloud-overrides) | Freezes the in-game Cloud/DLC/Cohort override system so remote updates and cached DLC files can never overwrite local patched assets or TweakValues, and speeds up startup. |  |
+| [Disable retention notifications](#disable-retention-notifications) | Prevents the game from scheduling local "come back and play" reminder notifications whenever it goes to the background. |  |
+| [Enhanced replays and MP4/GIF export](#enhanced-replays-and-mp4-gif-export) | Adds a Replay Studio button during goal replays to customize playback speed, loop, slow-mo overlays, all-chance replays, and export clean HUD-free MP4 videos or animated GIFs. |  |
+| [Fix text input backspace](#fix-text-input-backspace) | Fixes backspace when typing names in the game by using the in-game keyboard, which has a working delete button. |  |
+| [Hide Games we like button](#hide-games-we-like-button) | Hides the promotional "Games we like" button on the Options screen in both modern and classic UI. |  |
+| [Remove in-game promo interstitial](#remove-in-game-promo-interstitial) | Suppresses the game's built-in promo interstitial on all three entry paths while preserving navigation and return to play. |  |
+| [Remove network interstitial ads](#remove-network-interstitial-ads) | Blocks loading and display of non-rewarded interstitials from AdMob and DT Exchange/Fyber while preserving rewarded videos. |  |
+| [Restrict advertising ID](#restrict-advertising-id) | Removes GAID and AdServices Ad ID permissions to reduce ad tracking, while keeping Attribution and Topics. |  |
+| [Retro season selector](#retro-season-selector) | Prompts to choose a historical club database (2011–2026) bundled in the APK whenever you start a new career. Existing careers are unaffected. |  |
+| [Save backup and restore](#save-backup-and-restore) | Adds a Backup button to the Career screen (modern and classic UI) to export and restore your full save via the system file picker, with automatic rollback protection. |  |
+| [Unlock Pro features](#unlock-pro-features) | Unlocks the Pro license, ad removal, pitches/weather and special balls by setting the local license flags the game checks. |  |
+
+</details>
+
 <details open>
 <summary>📦 MyTherapy&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
@@ -42,37 +74,6 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 | [Require explicit analytics consent in MyTherapy](#require-explicit-analytics-consent-in-mytherapy) | Treats an unregistered analytics consent as opt-out, while preserving recorded acceptance and refusal. |  |
 | [Restrict advertising ID in MyTherapy](#restrict-advertising-id-in-mytherapy) | Removes GAID and AdServices Ad ID permissions to reduce ad tracking, keeping attribution, topics and consent untouched. |  |
 | [Unlock Plus benefits in MyTherapy](#unlock-plus-benefits-in-mytherapy) | Grants the local Plus state the app reads for ad-free access, extra calendar days and the PDF entry point. |  |
-
-</details>
-
-<details open>
-<summary>📦 New Star Soccer&nbsp;&nbsp;•&nbsp;&nbsp;15 patches</summary>
-<br>
-
-**Package name:** `com.newstargames.newstarsoccer`
-
-**🎯 Supported versions:**
-
-| 4.34 |
-| :---: |
-
-| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
-|----------|----------------|-----------|
-| [Disable Firebase Analytics](#disable-firebase-analytics) | Disables Firebase Analytics collection through the SDK's official manifest flag, while keeping push notifications and the consent UI. |  |
-| [Disable Flurry analytics session](#disable-flurry-analytics-session) | Prevents the game from starting a Flurry analytics session without removing SDK classes or changing the consent flow. |  |
-| [Disable Flurry startup measurement](#disable-flurry-startup-measurement) | Stops the Flurry provider from capturing startup time and memory usage while keeping the component declared. |  |
-| [Disable Google Play Games](#disable-google-play-games) | Disables broken Google Play Games auto-sign-in on re-signed APKs and hides the dead Play Games button on the Career screen (modern and classic UI). |  |
-| [Disable remote config and cloud overrides](#disable-remote-config-and-cloud-overrides) | Freezes the in-game Cloud/DLC/Cohort override system so remote updates and cached DLC files can never overwrite local patched assets or TweakValues, and speeds up startup. |  |
-| [Disable retention notifications](#disable-retention-notifications) | Prevents the game from scheduling local "come back and play" reminder notifications whenever it goes to the background. |  |
-| [Enhanced replays and MP4/GIF export](#enhanced-replays-and-mp4-gif-export) | Adds a Replay Studio button during goal replays to customize playback speed, loop, slow-mo overlays, all-chance replays, and export clean HUD-free MP4 videos or animated GIFs. |  |
-| [Fix text input backspace](#fix-text-input-backspace) | Fixes backspace when typing names in the game by using the in-game keyboard, which has a working delete button. |  |
-| [Hide Games we like button](#hide-games-we-like-button) | Hides the promotional "Games we like" button on the Options screen in both modern and classic UI. |  |
-| [Remove in-game promo interstitial](#remove-in-game-promo-interstitial) | Suppresses the game's built-in promo interstitial on all three entry paths while preserving navigation and return to play. |  |
-| [Remove network interstitial ads](#remove-network-interstitial-ads) | Blocks loading and display of non-rewarded interstitials from AdMob and DT Exchange/Fyber while preserving rewarded videos. |  |
-| [Restrict advertising ID](#restrict-advertising-id) | Removes GAID and AdServices Ad ID permissions to reduce ad tracking, while keeping Attribution and Topics. |  |
-| [Retro season selector](#retro-season-selector) | Prompts to choose a historical club database (2011–2026) bundled in the APK whenever you start a new career. Existing careers are unaffected. |  |
-| [Save backup and restore](#save-backup-and-restore) | Adds a Backup button to the Career screen (modern and classic UI) to export and restore your full save via the system file picker, with automatic rollback protection. |  |
-| [Unlock Pro features](#unlock-pro-features) | Unlocks the Pro license, ad removal, pitches/weather and special balls by setting the local license flags the game checks. |  |
 
 </details>
 
