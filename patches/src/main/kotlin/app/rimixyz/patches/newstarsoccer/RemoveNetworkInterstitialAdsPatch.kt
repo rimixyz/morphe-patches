@@ -21,7 +21,7 @@ private const val RETURN_VOID = "return-void"
 val removeNetworkInterstitialAdsPatch = patch(
     name = "Remove network interstitial ads",
     description = "Blocks loading and display of non-rewarded interstitials from AdMob and DT Exchange/Fyber while preserving rewarded videos.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)
 

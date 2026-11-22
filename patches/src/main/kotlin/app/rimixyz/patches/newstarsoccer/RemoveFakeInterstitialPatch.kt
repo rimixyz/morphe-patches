@@ -15,7 +15,7 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_NEWSTARSOCER
 val removeFakeInterstitialPatch = patch(
     name = "Remove in-game promo interstitial",
     description = "Suppresses the game's built-in promo interstitial on all three entry paths while preserving navigation and return to play.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)
 

@@ -21,7 +21,7 @@ private val ADVERTISING_ID_PERMISSIONS = setOf(
 val restrictAdvertisingIdPatch = patch(
     name = "Restrict advertising ID",
     description = "Removes GAID and AdServices Ad ID permissions to reduce ad tracking, while keeping Attribution and Topics.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_NEWSTARSOCER)
 
