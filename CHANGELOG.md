@@ -1,3 +1,9 @@
+## [1.6.5-dev.3](https://github.com/rimixyz/morphe-patches/compare/v1.6.5-dev.2...v1.6.5-dev.3) (2026-11-22)
+
+### 🐛 Bug Fixes
+
+* create editable schedulers and reminder times when importing MyTherapy CSV history ([fc2e744](https://github.com/rimixyz/morphe-patches/commit/fc2e7449699babbee29658960e45e42ff8eda75f))
+
 ## [1.6.5-dev.2](https://github.com/rimixyz/morphe-patches/compare/v1.6.5-dev.1...v1.6.5-dev.2) (2026-11-22)
 
 ### 🔧 Improvements
