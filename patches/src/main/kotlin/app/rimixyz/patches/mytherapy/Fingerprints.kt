@@ -209,3 +209,104 @@ internal object BannerLoadFingerprint : Fingerprint(
         methodCall(definingClass = AD_VIEW, name = "loadAd"),
     ),
 )
+
+private const val MY_APPLICATION = "Leu/smartpatient/mytherapy/MyApplication;"
+private const val INITIALIZE_CLEVERTAP = "Leu/smartpatient/mytherapy/pushcampaign/InitializeCleverTapKt;"
+private const val ANDROID_ENTRY_POINT_KT =
+    "Leu/smartpatient/mytherapy/multiplatform/umbrella/AndroidEntryPointKt;"
+private const val RUN_APP_INITIALIZERS =
+    "Leu/smartpatient/mytherapy/multiplatform/lib/lifecycle/RunAppInitializersUseCase;"
+private const val GET_SETTINGS_ITEMS =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/settingssectionmanagement/usecase/GetSettingsItemsUseCase;"
+private const val ROOT_ACTIVITY =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/root/RootActivity;"
+private const val BASE_ACTIVITY =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/presentation/BaseActivity;"
+private const val REFRESH_REMINDERS_FACTORY =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/dailytodolist/domain/usecase/RefreshRemindersUseCaseImpl\$MetroFactory;"
+private const val METRO_PROVIDER = "Ldev/zacsweers/metro/Provider;"
+private const val USER_SESSION_INITIALIZER =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/account/infrastructure/UserSessionInitializer;"
+private const val IS_USER_LOGGED_IN =
+    "Leu/smartpatient/mytherapy/multiplatform/feature/account/api/usecase/IsUserLoggedInUseCase;"
+private const val USER_SESSION =
+    "Leu/smartpatient/mytherapy/multiplatform/lib/lifecycle/UserSession;"
+
+/**
+ * Entrada da Application antes da criação do grafo Metro e da abertura dos bancos Room3.
+ * Usada para aplicar restaurações a frio, importações de CSV e rollbacks pendentes.
+ */
+internal object MyApplicationOnCreateFingerprint : Fingerprint(
+    definingClass = MY_APPLICATION,
+    name = "onCreate",
+    returnType = "V",
+    parameters = emptyList(),
+    filters = listOf(
+        methodCall(definingClass = INITIALIZE_CLEVERTAP, name = "initializeCleverTap"),
+        methodCall(definingClass = ANDROID_ENTRY_POINT_KT, name = "createAndroidEntryPoint"),
+        methodCall(definingClass = RUN_APP_INITIALIZERS, name = "invoke"),
+    ),
+)
+
+/**
+ * Construtor do agregador de itens de Configurações. O conjunto injetado pelo Metro é estendido
+ * com o provider de "Backup e Restauração Local".
+ */
+internal object GetSettingsItemsInitFingerprint : Fingerprint(
+    definingClass = GET_SETTINGS_ITEMS,
+    name = "<init>",
+    returnType = "V",
+    parameters = listOf("Ljava/util/Set;"),
+    filters = listOf(
+        fieldAccess(definingClass = GET_SETTINGS_ITEMS, name = "a", type = "Ljava/util/Set;"),
+    ),
+)
+
+/**
+ * Activity principal do app. Logo após super.onCreate(Bundle), registramos os launchers SAF
+ * (ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT) no ActivityResultRegistry.
+ */
+internal object RootActivityOnCreateFingerprint : Fingerprint(
+    definingClass = ROOT_ACTIVITY,
+    name = "onCreate",
+    returnType = "V",
+    parameters = listOf("Landroid/os/Bundle;"),
+    filters = listOf(
+        methodCall(
+            definingClass = "Landroidx/core/splashscreen/SplashScreen\$Companion;",
+            name = "installSplashScreen",
+        ),
+        methodCall(definingClass = BASE_ACTIVITY, name = "onCreate"),
+        methodCall(definingClass = BASE_ACTIVITY, name = "setMyTherapyContent\$default"),
+    ),
+)
+
+/**
+ * Fábrica Metro do RefreshRemindersUseCaseImpl, sempre construída em AndroidEntryPoint$Impl.<init>.
+ * Permite disparar o recálculo de lembretes após restauração ou importação de CSV.
+ */
+internal object RefreshRemindersFactoryInitFingerprint : Fingerprint(
+    definingClass = REFRESH_REMINDERS_FACTORY,
+    name = "<init>",
+    returnType = "V",
+    parameters = listOf(METRO_PROVIDER, METRO_PROVIDER, METRO_PROVIDER, METRO_PROVIDER),
+    filters = listOf(
+        fieldAccess(definingClass = REFRESH_REMINDERS_FACTORY, name = "b", type = METRO_PROVIDER),
+        fieldAccess(definingClass = REFRESH_REMINDERS_FACTORY, name = "e", type = METRO_PROVIDER),
+    ),
+)
+
+/**
+ * Inicializador de sessão de usuário. O retorno bem-sucedido após UserSession.onUserSessionStart
+ * sinaliza o momento seguro para reconstruir alarmes/notificações locais.
+ */
+internal object UserSessionInitializerFingerprint : Fingerprint(
+    definingClass = USER_SESSION_INITIALIZER,
+    name = "initialize",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lkotlin/coroutines/Continuation;"),
+    filters = listOf(
+        methodCall(definingClass = IS_USER_LOGGED_IN, name = "invoke"),
+        methodCall(definingClass = USER_SESSION, name = "onUserSessionStart"),
+    ),
+)
