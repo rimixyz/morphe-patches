@@ -1,3 +1,9 @@
+## [1.6.5-dev.4](https://github.com/rimixyz/morphe-patches/compare/v1.6.5-dev.3...v1.6.5-dev.4) (2026-11-22)
+
+### 🔧 Improvements
+
+* unify New Star Soccer ad and privacy patches and enable Retro season selector by default ([aed3b22](https://github.com/rimixyz/morphe-patches/commit/aed3b22f64aad21c208d847fdbc355afcd837959))
+
 ## [1.6.5-dev.3](https://github.com/rimixyz/morphe-patches/compare/v1.6.5-dev.2...v1.6.5-dev.3) (2026-11-22)
 
 ### 🐛 Bug Fixes
