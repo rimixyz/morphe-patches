@@ -20,7 +20,7 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.6.5-dev.1](https://github.com/rimixyz/morphe-patches/releases/tag/v1.6.5-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;32 patches total
+> **[v1.6.5-dev.2](https://github.com/rimixyz/morphe-patches/releases/tag/v1.6.5-dev.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;28 patches total
 <details open>
 <summary>📦 New Star Soccer&nbsp;&nbsp;•&nbsp;&nbsp;16 patches</summary>
 <br>
@@ -54,7 +54,7 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 </details>
 
 <details open>
-<summary>📦 MyTherapy&nbsp;&nbsp;•&nbsp;&nbsp;9 patches</summary>
+<summary>📦 MyTherapy&nbsp;&nbsp;•&nbsp;&nbsp;5 patches</summary>
 <br>
 
 **Package name:** `eu.smartpatient.mytherapy`
@@ -66,14 +66,10 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Disable AppsFlyer attribution in MyTherapy](#disable-appsflyer-attribution-in-mytherapy) | Neutralizes the app's explicit AppsFlyer start while keeping its existing opt-out and consent paths intact. |  |
-| [Disable Firebase Analytics in MyTherapy](#disable-firebase-analytics-in-mytherapy) | Disables Firebase Analytics collection through the SDK's official manifest flag, keeping push, remote config and the consent UI. |  |
 | [Disable PairIP license check in MyTherapy](#disable-pairip-license-check-in-mytherapy) | Neutralizes the PairIP license check so the re-signed APK can start, without removing its components. |  |
-| [Disable Sentry diagnostics in MyTherapy](#disable-sentry-diagnostics-in-mytherapy) | Prevents Sentry initialization at the app's single entry point, without removing its providers or native libraries. |  |
-| [Disable common ads in MyTherapy](#disable-common-ads-in-mytherapy) | Stops non-rewarded banner and native ad requests at the load entry points, preserving UMP, interstitial and rewarded flows. |  |
+| [Disable all ads](#disable-all-ads) | Blocks all ad formats (banner, native, interstitial and rewarded), stops Mobile Ads/mediation SDK initialization, and skips UMP ad consent prompts. |  |
+| [Disable analytics and tracking](#disable-analytics-and-tracking) | Disables Firebase Analytics, AppsFlyer attribution, Sentry diagnostics, internal analytics tracking, and removes Advertising ID permissions. |  |
 | [Local backup and restore](#local-backup-and-restore) | Adds a Local Backup & Restore item to Settings to export/restore local .zip backups (with automatic rollback) and import official MyTherapy Archive CSV history. |  |
-| [Require explicit analytics consent in MyTherapy](#require-explicit-analytics-consent-in-mytherapy) | Treats an unregistered analytics consent as opt-out, while preserving recorded acceptance and refusal. |  |
-| [Restrict advertising ID in MyTherapy](#restrict-advertising-id-in-mytherapy) | Removes GAID and AdServices Ad ID permissions to reduce ad tracking, keeping attribution, topics and consent untouched. |  |
 | [Unlock Plus benefits in MyTherapy](#unlock-plus-benefits-in-mytherapy) | Grants the local Plus state the app reads for ad-free access, extra calendar days and the PDF entry point. |  |
 
 </details>

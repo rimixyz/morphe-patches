@@ -1,3 +1,13 @@
+## [1.6.5-dev.2](https://github.com/rimixyz/morphe-patches/compare/v1.6.5-dev.1...v1.6.5-dev.2) (2026-11-22)
+
+### 🔧 Improvements
+
+* unify MyTherapy privacy patches and block all ad formats and SDK initialization ([98734a8](https://github.com/rimixyz/morphe-patches/commit/98734a8798387aa3ee5125d01d2d96fd92563415))
+
+### 🐛 Bug Fixes
+
+* render MyTherapy backup dialogs with explicit high-contrast theme colors ([dad0971](https://github.com/rimixyz/morphe-patches/commit/dad0971b4127864e2dae0dab7a2b3658a8558e95))
+
 ## [1.6.5-dev.1](https://github.com/rimixyz/morphe-patches/compare/v1.6.4...v1.6.5-dev.1) (2026-11-22)
 
 ### 🔧 Improvements

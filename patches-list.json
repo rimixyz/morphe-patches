@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.6.5-dev.1",
+  "version": "1.6.5-dev.2",
   "patches": [
     {
       "name": "Convert IAP items to Star Bux",
@@ -37,40 +37,6 @@
       "options": []
     },
     {
-      "name": "Disable AppsFlyer attribution in MyTherapy",
-      "description": "Neutralizes the app's explicit AppsFlyer start while keeping its existing opt-out and consent paths intact.",
-      "default": true,
-      "category": null,
-      "compatiblePackages": [
-        {
-          "packageName": "eu.smartpatient.mytherapy",
-          "name": "MyTherapy",
-          "description": null,
-          "apkFileType": "APKS",
-          "appIconColor": "#0F9D58",
-          "signatures": [
-            "3099a23a0569e918f79d43bc144622c245e18e8928f997a9a8c883c9348ed5f7"
-          ],
-          "formFactor": "MOBILE",
-          "targets": [
-            {
-              "version": "4.16.2",
-              "versionCodes": {
-                "ARM64_V8A": 4016002,
-                "ARMEABI_V7A": 4016002,
-                "X86_64": 4016002,
-                "X86": 4016002
-              },
-              "isExperimental": false,
-              "minSdk": null,
-              "description": null
-            }
-          ]
-        }
-      ],
-      "options": []
-    },
-    {
       "name": "Disable Firebase Analytics",
       "description": "Disables Firebase Analytics collection through the SDK's official manifest flag, while keeping push notifications and the consent UI.",
       "default": true,
@@ -94,40 +60,6 @@
                 "ARMEABI_V7A": 142,
                 "X86_64": 142,
                 "X86": 142
-              },
-              "isExperimental": false,
-              "minSdk": null,
-              "description": null
-            }
-          ]
-        }
-      ],
-      "options": []
-    },
-    {
-      "name": "Disable Firebase Analytics in MyTherapy",
-      "description": "Disables Firebase Analytics collection through the SDK's official manifest flag, keeping push, remote config and the consent UI.",
-      "default": true,
-      "category": null,
-      "compatiblePackages": [
-        {
-          "packageName": "eu.smartpatient.mytherapy",
-          "name": "MyTherapy",
-          "description": null,
-          "apkFileType": "APKS",
-          "appIconColor": "#0F9D58",
-          "signatures": [
-            "3099a23a0569e918f79d43bc144622c245e18e8928f997a9a8c883c9348ed5f7"
-          ],
-          "formFactor": "MOBILE",
-          "targets": [
-            {
-              "version": "4.16.2",
-              "versionCodes": {
-                "ARM64_V8A": 4016002,
-                "ARMEABI_V7A": 4016002,
-                "X86_64": 4016002,
-                "X86": 4016002
               },
               "isExperimental": false,
               "minSdk": null,
@@ -275,8 +207,35 @@
       "options": []
     },
     {
-      "name": "Disable Sentry diagnostics in MyTherapy",
-      "description": "Prevents Sentry initialization at the app's single entry point, without removing its providers or native libraries.",
+      "name": "Disable Yodo1 analytics",
+      "description": "Stops the ThinkingData behavioural tracker bundled with Yodo1 MAS (endpoint c1.yodo1.com), including automatic app/screen/click/crash events.",
+      "default": true,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "air.WRCareer",
+          "name": "Wrestling Revolution",
+          "description": null,
+          "apkFileType": "APK",
+          "appIconColor": "#D32F2F",
+          "signatures": null,
+          "formFactor": "MOBILE",
+          "targets": [
+            {
+              "version": "2.150.64",
+              "versionCodes": null,
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
+      "name": "Disable all ads",
+      "description": "Blocks all ad formats (banner, native, interstitial and rewarded), stops Mobile Ads/mediation SDK initialization, and skips UMP ad consent prompts.",
       "default": true,
       "category": null,
       "compatiblePackages": [
@@ -309,35 +268,8 @@
       "options": []
     },
     {
-      "name": "Disable Yodo1 analytics",
-      "description": "Stops the ThinkingData behavioural tracker bundled with Yodo1 MAS (endpoint c1.yodo1.com), including automatic app/screen/click/crash events.",
-      "default": true,
-      "category": null,
-      "compatiblePackages": [
-        {
-          "packageName": "air.WRCareer",
-          "name": "Wrestling Revolution",
-          "description": null,
-          "apkFileType": "APK",
-          "appIconColor": "#D32F2F",
-          "signatures": null,
-          "formFactor": "MOBILE",
-          "targets": [
-            {
-              "version": "2.150.64",
-              "versionCodes": null,
-              "isExperimental": false,
-              "minSdk": null,
-              "description": null
-            }
-          ]
-        }
-      ],
-      "options": []
-    },
-    {
-      "name": "Disable common ads in MyTherapy",
-      "description": "Stops non-rewarded banner and native ad requests at the load entry points, preserving UMP, interstitial and rewarded flows.",
+      "name": "Disable analytics and tracking",
+      "description": "Disables Firebase Analytics, AppsFlyer attribution, Sentry diagnostics, internal analytics tracking, and removes Advertising ID permissions.",
       "default": true,
       "category": null,
       "compatiblePackages": [
@@ -750,40 +682,6 @@
       "options": []
     },
     {
-      "name": "Require explicit analytics consent in MyTherapy",
-      "description": "Treats an unregistered analytics consent as opt-out, while preserving recorded acceptance and refusal.",
-      "default": true,
-      "category": null,
-      "compatiblePackages": [
-        {
-          "packageName": "eu.smartpatient.mytherapy",
-          "name": "MyTherapy",
-          "description": null,
-          "apkFileType": "APKS",
-          "appIconColor": "#0F9D58",
-          "signatures": [
-            "3099a23a0569e918f79d43bc144622c245e18e8928f997a9a8c883c9348ed5f7"
-          ],
-          "formFactor": "MOBILE",
-          "targets": [
-            {
-              "version": "4.16.2",
-              "versionCodes": {
-                "ARM64_V8A": 4016002,
-                "ARMEABI_V7A": 4016002,
-                "X86_64": 4016002,
-                "X86": 4016002
-              },
-              "isExperimental": false,
-              "minSdk": null,
-              "description": null
-            }
-          ]
-        }
-      ],
-      "options": []
-    },
-    {
       "name": "Restrict advertising ID",
       "description": "Removes GAID and AdServices Ad ID permissions to reduce ad tracking, while keeping Attribution and Topics.",
       "default": true,
@@ -807,40 +705,6 @@
                 "ARMEABI_V7A": 142,
                 "X86_64": 142,
                 "X86": 142
-              },
-              "isExperimental": false,
-              "minSdk": null,
-              "description": null
-            }
-          ]
-        }
-      ],
-      "options": []
-    },
-    {
-      "name": "Restrict advertising ID in MyTherapy",
-      "description": "Removes GAID and AdServices Ad ID permissions to reduce ad tracking, keeping attribution, topics and consent untouched.",
-      "default": true,
-      "category": null,
-      "compatiblePackages": [
-        {
-          "packageName": "eu.smartpatient.mytherapy",
-          "name": "MyTherapy",
-          "description": null,
-          "apkFileType": "APKS",
-          "appIconColor": "#0F9D58",
-          "signatures": [
-            "3099a23a0569e918f79d43bc144622c245e18e8928f997a9a8c883c9348ed5f7"
-          ],
-          "formFactor": "MOBILE",
-          "targets": [
-            {
-              "version": "4.16.2",
-              "versionCodes": {
-                "ARM64_V8A": 4016002,
-                "ARMEABI_V7A": 4016002,
-                "X86_64": 4016002,
-                "X86": 4016002
               },
               "isExperimental": false,
               "minSdk": null,
