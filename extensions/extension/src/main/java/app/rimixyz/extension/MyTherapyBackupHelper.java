@@ -1,17 +1,29 @@
 package app.rimixyz.extension;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Application;
+import android.app.Dialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -632,32 +644,60 @@ public final class MyTherapyBackupHelper {
         }
 
         final boolean hasRollback = hasAvailableRollback(activity);
-        List<String> options = new ArrayList<>();
-        options.add(t("Exportar backup local (.zip)", "Export local backup (.zip)"));
-        options.add(t("Restaurar backup local (.zip)", "Restore local backup (.zip)"));
-        options.add(t("Importar histórico CSV (MyTherapy Archive)", "Import CSV history (MyTherapy Archive)"));
-        if (hasRollback) {
-            options.add(t("Reverter última restauração / importação", "Revert last restore / import"));
-        }
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(activity);
-        builder.setTitle(t("Backup e Restauração Local", "Local Backup & Restore"));
-        builder.setItems(options.toArray(new String[0]), new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                if (which == 0) {
+        List<MenuOption> options = new ArrayList<>();
+        options.add(new MenuOption(
+            t("Exportar backup local (.zip)", "Export local backup (.zip)"),
+            t("Salva tratamentos, histórico, metas e lembretes", "Saves treatments, history, goals, and reminders"),
+            false,
+            new Runnable() {
+                @Override
+                public void run() {
                     promptExportZip();
-                } else if (which == 1) {
-                    promptRestoreZip();
-                } else if (which == 2) {
-                    promptImportCsv();
-                } else if (which == 3 && hasRollback) {
-                    confirmRollback(activity);
                 }
             }
-        });
-        builder.setNegativeButton(t("Fechar", "Close"), null);
-        builder.show();
+        ));
+        options.add(new MenuOption(
+            t("Restaurar backup local (.zip)", "Restore local backup (.zip)"),
+            t("Restaura um arquivo .zip gerado por este patch", "Restores a .zip archive created by this patch"),
+            false,
+            new Runnable() {
+                @Override
+                public void run() {
+                    promptRestoreZip();
+                }
+            }
+        ));
+        options.add(new MenuOption(
+            t("Importar histórico CSV (MyTherapy Archive)", "Import CSV history (MyTherapy Archive)"),
+            t("Importa o arquivo oficial .csv ou .zip exportado do app", "Imports the official .csv or .zip exported from the app"),
+            false,
+            new Runnable() {
+                @Override
+                public void run() {
+                    promptImportCsv();
+                }
+            }
+        ));
+        if (hasRollback) {
+            options.add(new MenuOption(
+                t("Reverter última restauração / importação", "Revert last restore / import"),
+                t("Desfaz a última operação e volta os bancos anteriores", "Undoes the last operation and restores previous databases"),
+                true,
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        confirmRollback(activity);
+                    }
+                }
+            ));
+        }
+
+        showStyledMenuDialog(
+            activity,
+            t("Backup e Restauração Local", "Local Backup & Restore"),
+            options,
+            t("Fechar", "Close")
+        );
     }
 
     private static void promptExportZip() {
@@ -713,11 +753,7 @@ public final class MyTherapyBackupHelper {
             String title = obj.optString("title", t("Backup Local", "Local Backup"));
             String message = obj.optString("message", "");
             if (!message.isEmpty()) {
-                new AlertDialog.Builder(activity)
-                    .setTitle(title)
-                    .setMessage(message)
-                    .setPositiveButton("OK", null)
-                    .show();
+                showStyledAlertDialog(activity, title, message, "OK", null, null, null);
             }
         } catch (Throwable t) {
             Log.w(TAG, "Failed to display last result", t);
@@ -1061,22 +1097,25 @@ public final class MyTherapyBackupHelper {
                     "An automatic rollback snapshot will be saved before applying and the app will restart."
                 ));
 
-                new AlertDialog.Builder(activity)
-                    .setTitle(t("Confirmar restauração", "Confirm restore"))
-                    .setMessage(msg.toString())
-                    .setPositiveButton(t("Restaurar e reiniciar", "Restore & restart"), new DialogInterface.OnClickListener() {
+                showStyledAlertDialog(
+                    activity,
+                    t("Confirmar restauração", "Confirm restore"),
+                    msg.toString(),
+                    t("Restaurar e reiniciar", "Restore & restart"),
+                    new Runnable() {
                         @Override
-                        public void onClick(DialogInterface dialog, int which) {
+                        public void run() {
                             scheduleColdZipRestoreAndRestart(activity, preview);
                         }
-                    })
-                    .setNegativeButton(t("Cancelar", "Cancel"), new DialogInterface.OnClickListener() {
+                    },
+                    t("Cancelar", "Cancel"),
+                    new Runnable() {
                         @Override
-                        public void onClick(DialogInterface dialog, int which) {
+                        public void run() {
                             deleteRecursively(new File(getBackupRoot(activity), DIR_STAGING_ZIP));
                         }
-                    })
-                    .show();
+                    }
+                );
             }
         });
     }
@@ -1243,22 +1282,25 @@ public final class MyTherapyBackupHelper {
                         + "If an item already exists in the app, history will be linked to it automatically.\n\n"
                         + "A rollback snapshot will be saved before importing and the app will restart."
                 );
-                new AlertDialog.Builder(activity)
-                    .setTitle(t("Importar histórico CSV", "Import CSV history"))
-                    .setMessage(msg)
-                    .setPositiveButton(t("Importar e reiniciar", "Import & restart"), new DialogInterface.OnClickListener() {
+                showStyledAlertDialog(
+                    activity,
+                    t("Importar histórico CSV", "Import CSV history"),
+                    msg,
+                    t("Importar e reiniciar", "Import & restart"),
+                    new Runnable() {
                         @Override
-                        public void onClick(DialogInterface dialog, int which) {
+                        public void run() {
                             scheduleColdCsvImportAndRestart(activity);
                         }
-                    })
-                    .setNegativeButton(t("Cancelar", "Cancel"), new DialogInterface.OnClickListener() {
+                    },
+                    t("Cancelar", "Cancel"),
+                    new Runnable() {
                         @Override
-                        public void onClick(DialogInterface dialog, int which) {
+                        public void run() {
                             deleteRecursively(new File(getBackupRoot(activity), DIR_STAGING_CSV));
                         }
-                    })
-                    .show();
+                    }
+                );
             }
         });
     }
@@ -1299,17 +1341,19 @@ public final class MyTherapyBackupHelper {
     }
 
     private static void confirmRollback(final Activity activity) {
-        new AlertDialog.Builder(activity)
-            .setTitle(t("Reverter última alteração", "Revert last change"))
-            .setMessage(t(
+        showStyledAlertDialog(
+            activity,
+            t("Reverter última alteração", "Revert last change"),
+            t(
                 "Isso restaurará os bancos exatamente como estavam antes da última restauração "
                     + "ou importação de CSV e reiniciará o app.",
                 "This will restore your databases to their exact state before the last restore "
                     + "or CSV import and restart the app."
-            ))
-            .setPositiveButton(t("Reverter e reiniciar", "Revert & restart"), new DialogInterface.OnClickListener() {
+            ),
+            t("Reverter e reiniciar", "Revert & restart"),
+            new Runnable() {
                 @Override
-                public void onClick(DialogInterface dialog, int which) {
+                public void run() {
                     try {
                         File root = getBackupRoot(activity);
                         ensureDir(root);
@@ -1322,9 +1366,10 @@ public final class MyTherapyBackupHelper {
                         showInfoDialogOnMain(t("Erro", "Error"), safeErrorMessage(t));
                     }
                 }
-            })
-            .setNegativeButton(t("Cancelar", "Cancel"), null)
-            .show();
+            },
+            t("Cancelar", "Cancel"),
+            null
+        );
     }
 
     // =========================================================================
@@ -2909,16 +2954,265 @@ public final class MyTherapyBackupHelper {
             public void run() {
                 Activity activity = rootActivityRef.get();
                 if (activity != null && !activity.isFinishing()) {
-                    new AlertDialog.Builder(activity)
-                        .setTitle(title)
-                        .setMessage(message)
-                        .setPositiveButton("OK", null)
-                        .show();
+                    showStyledAlertDialog(activity, title, message, "OK", null, null, null);
                 } else {
                     toastOnMain(title + ": " + message);
                 }
             }
         });
+    }
+
+    private static final class MenuOption {
+        final String title;
+        final String subtitle;
+        final boolean danger;
+        final Runnable action;
+
+        MenuOption(String title, String subtitle, boolean danger, Runnable action) {
+            this.title = title;
+            this.subtitle = subtitle;
+            this.danger = danger;
+            this.action = action;
+        }
+    }
+
+    private static boolean isDarkMode(Context ctx) {
+        int mode = ctx.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    private static int dp(Context ctx, int value) {
+        return Math.round(value * ctx.getResources().getDisplayMetrics().density);
+    }
+
+    private static LinearLayout createDialogCard(Activity activity, String title, boolean dark) {
+        int bgColor = dark ? 0xFF1F2328 : 0xFFFFFFFF;
+        int titleColor = dark ? 0xFFF3F4F6 : 0xFF14171A;
+
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(bgColor);
+        cardBg.setCornerRadius(dp(activity, 20));
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackground(cardBg);
+        root.setPadding(dp(activity, 20), dp(activity, 20), dp(activity, 20), dp(activity, 14));
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextColor(titleColor);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setPadding(dp(activity, 4), 0, dp(activity, 4), dp(activity, 12));
+        root.addView(titleView);
+
+        return root;
+    }
+
+    private static TextView createActionButton(
+        Activity activity,
+        String label,
+        int textColor,
+        boolean bold,
+        View.OnClickListener listener
+    ) {
+        TextView btn = new TextView(activity);
+        btn.setText(label);
+        btn.setTextColor(textColor);
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        btn.setTypeface(bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        btn.setPadding(dp(activity, 14), dp(activity, 10), dp(activity, 14), dp(activity, 10));
+        btn.setClickable(true);
+        btn.setFocusable(true);
+        TypedValue outValue = new TypedValue();
+        if (activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)) {
+            btn.setBackgroundResource(outValue.resourceId);
+        }
+        btn.setOnClickListener(listener);
+        return btn;
+    }
+
+    private static void showStyledMenuDialog(
+        Activity activity,
+        String title,
+        List<MenuOption> options,
+        String closeLabel
+    ) {
+        boolean dark = isDarkMode(activity);
+        int itemTitleColor = dark ? 0xFFF3F4F6 : 0xFF14171A;
+        int itemSubColor = dark ? 0xFF9CA3AF : 0xFF5F6368;
+        int dividerColor = dark ? 0x26FFFFFF : 0x1A000000;
+        int dangerColor = dark ? 0xFFF87171 : 0xFFD93025;
+        int cancelColor = dark ? 0xFFB0B8C4 : 0xFF5F6368;
+
+        LinearLayout card = createDialogCard(activity, title, dark);
+
+        final Dialog dialog = createCardDialog(activity, card);
+
+        ScrollView scroll = new ScrollView(activity);
+        LinearLayout list = new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+
+        for (int i = 0; i < options.size(); i++) {
+            final MenuOption opt = options.get(i);
+            if (i > 0) {
+                View div = new View(activity);
+                div.setBackgroundColor(dividerColor);
+                LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(activity, 1))
+                );
+                divLp.setMargins(dp(activity, 4), 0, dp(activity, 4), 0);
+                list.addView(div, divLp);
+            }
+
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(activity, 8), dp(activity, 13), dp(activity, 8), dp(activity, 13));
+            row.setClickable(true);
+            row.setFocusable(true);
+            TypedValue ripple = new TypedValue();
+            if (activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true)) {
+                row.setBackgroundResource(ripple.resourceId);
+            }
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    dialog.dismiss();
+                    if (opt.action != null) {
+                        opt.action.run();
+                    }
+                }
+            });
+
+            TextView tView = new TextView(activity);
+            tView.setText(opt.title);
+            tView.setTextColor(opt.danger ? dangerColor : itemTitleColor);
+            tView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+            tView.setTypeface(Typeface.DEFAULT_BOLD);
+            row.addView(tView);
+
+            if (opt.subtitle != null && !opt.subtitle.isEmpty()) {
+                TextView sView = new TextView(activity);
+                sView.setText(opt.subtitle);
+                sView.setTextColor(itemSubColor);
+                sView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+                sView.setPadding(0, dp(activity, 2), 0, 0);
+                row.addView(sView);
+            }
+
+            list.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+        }
+
+        scroll.addView(list);
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.END);
+        footer.setPadding(0, dp(activity, 10), 0, 0);
+        footer.addView(createActionButton(activity, closeLabel, cancelColor, true, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        }));
+        card.addView(footer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        showCardDialogWindow(activity, dialog);
+    }
+
+    private static void showStyledAlertDialog(
+        Activity activity,
+        String title,
+        String message,
+        String positiveLabel,
+        final Runnable onPositive,
+        String negativeLabel,
+        final Runnable onNegative
+    ) {
+        boolean dark = isDarkMode(activity);
+        int bodyColor = dark ? 0xFFD1D5DB : 0xFF3C4043;
+        int accentColor = dark ? 0xFF34D399 : 0xFF0F9D58;
+        int cancelColor = dark ? 0xFFB0B8C4 : 0xFF5F6368;
+
+        LinearLayout card = createDialogCard(activity, title, dark);
+
+        final Dialog dialog = createCardDialog(activity, card);
+
+        ScrollView scroll = new ScrollView(activity);
+        TextView msgView = new TextView(activity);
+        msgView.setText(message);
+        msgView.setTextColor(bodyColor);
+        msgView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        msgView.setLineSpacing(dp(activity, 2), 1.0f);
+        msgView.setPadding(dp(activity, 4), 0, dp(activity, 4), dp(activity, 8));
+        scroll.addView(msgView);
+
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f
+        );
+        card.addView(scroll, scrollLp);
+
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.END);
+        footer.setPadding(0, dp(activity, 12), 0, 0);
+
+        if (negativeLabel != null && !negativeLabel.isEmpty()) {
+            footer.addView(createActionButton(activity, negativeLabel, cancelColor, false, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    dialog.dismiss();
+                    if (onNegative != null) {
+                        onNegative.run();
+                    }
+                }
+            }));
+        }
+
+        if (positiveLabel != null && !positiveLabel.isEmpty()) {
+            footer.addView(createActionButton(activity, positiveLabel, accentColor, true, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    dialog.dismiss();
+                    if (onPositive != null) {
+                        onPositive.run();
+                    }
+                }
+            }));
+        }
+
+        card.addView(footer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        showCardDialogWindow(activity, dialog);
+    }
+
+    private static Dialog createCardDialog(Activity activity, View cardView) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(cardView);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+        return dialog;
+    }
+
+    private static void showCardDialogWindow(Activity activity, Dialog dialog) {
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int screenWidth = activity.getResources().getDisplayMetrics().widthPixels;
+            int targetWidth = Math.min((int) (screenWidth * 0.90f), dp(activity, 420));
+            window.setLayout(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
     }
 
     private static boolean isPortuguese() {
