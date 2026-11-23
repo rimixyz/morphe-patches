@@ -1,11 +1,8 @@
-<p align="right">
-  <img src="https://img.shields.io/badge/English-2962FF?style=flat-square" alt="English">
-  <a href="README.pt-BR.md">
-    <img src="https://img.shields.io/badge/Portugu%C3%AAs%20(BR)-333333?style=flat-square" alt="Português (BR)">
-  </a>
-</p>
-
-# 🧩 rimixyz Morphe Patches
+<h1>
+  🧩 rimixyz Morphe Patches
+  <a href="README.pt-BR.md"><img align="right" src="https://img.shields.io/badge/Portugu%C3%AAs%20(BR)-333333?style=flat-square" alt="Português (BR)"></a>
+  <img align="right" src="https://img.shields.io/badge/English-2962FF?style=flat-square" alt="English">
+</h1>
 
 <p align="left">
   <a href="https://github.com/rimixyz/morphe-patches/releases/latest">
