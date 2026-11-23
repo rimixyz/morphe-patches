@@ -10,6 +10,8 @@
   <img src="https://img.shields.io/badge/Made%20in-Brazil%20%F0%9F%87%A7%F0%9F%87%B7-009C3B?style=flat-square" alt="Made in Brazil">
 </p>
 
+🇺🇸 **English** · [🇧🇷 Português (BR)](README.pt-BR.md)
+
 Personal collection of patches for [Morphe](https://morphe.software).
 
 ## ❓ About
