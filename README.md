@@ -1,3 +1,10 @@
+<p align="right">
+  <img src="https://img.shields.io/badge/English-2962FF?style=flat-square" alt="English">
+  <a href="README.pt-BR.md">
+    <img src="https://img.shields.io/badge/Portugu%C3%AAs%20(BR)-333333?style=flat-square" alt="Português (BR)">
+  </a>
+</p>
+
 # 🧩 rimixyz Morphe Patches
 
 <p align="left">
@@ -7,10 +14,8 @@
   <a href="https://github.com/rimixyz/morphe-patches/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/rimixyz/morphe-patches?color=0F9D58&style=flat-square" alt="License">
   </a>
-  <img src="https://img.shields.io/badge/Made%20in-Brazil%20%F0%9F%87%A7%F0%9F%87%B7-009C3B?style=flat-square" alt="Made in Brazil">
+  <img src="https://img.shields.io/badge/Made%20in-Brazil-009C3B?style=flat-square" alt="Made in Brazil">
 </p>
-
-🇺🇸 **English** · [🇧🇷 Português (BR)](README.pt-BR.md)
 
 Personal collection of patches for [Morphe](https://morphe.software).
 
