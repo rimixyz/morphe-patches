@@ -1,3 +1,9 @@
+## [1.6.6](https://github.com/rimixyz/morphe-patches/compare/v1.6.5...v1.6.6) (2026-11-23)
+
+### 🔧 Improvements
+
+* replace 17TRACK Premium with full ads and tracking blocker, unify Wrestling Revolution patches, bump morphe-patcher to 2.5.0, and polish README ([6bbf8f5](https://github.com/rimixyz/morphe-patches/commit/6bbf8f52151f526678ef7a438382acb8b7b5a5a7))
+
 ## [1.6.5](https://github.com/rimixyz/morphe-patches/compare/v1.6.4...v1.6.5) (2026-11-23)
 
 ### 🔧 Improvements
