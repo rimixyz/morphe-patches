@@ -1,25 +1,40 @@
 # 🧩 rimixyz Morphe Patches
 
-All-in-one personal collection of patches for [Morphe](https://morphe.software) — **Made in Brazil** 🇧🇷.
+<p align="left">
+  <a href="https://github.com/rimixyz/morphe-patches/releases/latest">
+    <img src="https://img.shields.io/github/v/release/rimixyz/morphe-patches?label=latest&color=2962FF&style=flat-square" alt="Latest Release">
+  </a>
+  <a href="https://github.com/rimixyz/morphe-patches/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/rimixyz/morphe-patches?color=0F9D58&style=flat-square" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/Made%20in-Brazil%20%F0%9F%87%A7%F0%9F%87%B7-009C3B?style=flat-square" alt="Made in Brazil">
+</p>
+
+Personal collection of patches for [Morphe](https://morphe.software).
 
 ## ❓ About
 
-This is a clean, all-in-one repository for my personal Morphe patches across multiple Android apps.
+**Made for myself, shared for everyone:** Everything here starts as something I wanted for my own phone — daily apps I use and games I'm playing or revisiting. If it helps you too, enjoy! Updates happen whenever I feel like it, with no fixed schedules or guarantees.
 
 > [!NOTE]
-> **100% AI-crafted & tested before release:** Every patch in this repository is 100% created with AI, and is tested until it works properly before being released.
+> **100% AI-crafted & tested before release:** Every patch in this repository is 100% created with AI, and is tested on a real device until it works properly before being released to `main`.
 
-### How to use these patches
+## 📲 How to use
 
-Click the button below, or manually add this repository URL to Morphe Manager: `https://github.com/rimixyz/morphe-patches`
+Click the button below to add this source directly in **Morphe Manager**, or paste the repository URL manually: `https://github.com/rimixyz/morphe-patches`
 
 <a href="https://morphe.software/add-source?github=rimixyz/morphe-patches">
   <img src=".github/assets/add-to-morphe.svg" alt="Add to Morphe" height="48">
 </a>
 
-## 🩹 Patches list
+**Release channels:**
+- **`main` (Stable):** patches tested on a real device and ready for everyday use.
+- **`dev` (Pre-release):** work-in-progress updates or larger changes being tested before promoting to `main`.
+- **🧪 Experimental:** app targets still under investigation — may be incomplete, unstable, or removed at any time.
 
-<!-- PATCHES_START EXPANDED -->
+## 🩹 Patches
+
+<!-- PATCHES_START -->
 > **[v1.6.5](https://github.com/rimixyz/morphe-patches/releases/tag/v1.6.5)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;23 patches total
 <details open>
 <summary>📦 New Star Soccer&nbsp;&nbsp;•&nbsp;&nbsp;11 patches</summary>
@@ -119,16 +134,20 @@ Click the button below, or manually add this repository URL to Morphe Manager: `
 
 <!-- PATCHES_END -->
 
-### 🛠️ Building locally
+<details>
+<summary>🛠️ Building locally (for developers)</summary>
+<br>
 
 - Requires **Java 21** and GitHub Packages credentials with `read:packages` scope:
   - Set `GITHUB_ACTOR` and `GITHUB_TOKEN` environment variables, **or**
   - Add `gpr.user=<username>` and `gpr.key=<token>` to your user-level `~/.gradle/gradle.properties` (never commit tokens to the repository's `gradle.properties`).
 - Run `./gradlew buildAndroid`
-- The built patches `.mpp` file is found in `patches/build/libs/patches-*.mpp`
+- The built `.mpp` bundle is generated at `patches/build/libs/patches-*.mpp`
 - Patch using [Morphe Desktop](https://github.com/MorpheApp/morphe-desktop) like any other patch bundle.
 
 See the [Morphe documentation](https://github.com/MorpheApp/morphe-documentation) for more information.
+
+</details>
 
 ## 📜 License
 

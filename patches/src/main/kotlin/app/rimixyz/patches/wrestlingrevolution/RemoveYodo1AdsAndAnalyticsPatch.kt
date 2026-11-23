@@ -42,22 +42,24 @@ private fun fakeShow(opened: String, closed: String, earned: String? = null): St
 }
 
 /**
- * Removes Yodo1 MAS ads by short-circuiting the ANE bridge.
+ * Removes Yodo1 MAS ads by short-circuiting the ANE bridge and stops the
+ * ThinkingData behavioural tracker bundled inside Yodo1 MAS.
  *
  * - handleInitSuccess() is stopped before it preloads app-open/rewarded/
  *   interstitial through the real SDK.
  * - load and show methods dispatch the same events the real SDK would, so the
  *   ActionScript state machine keeps working without any ad being requested.
  * - is*Loaded() returns true so the game does not loop trying to prepare ads.
- *
- * Banners are fully suppressed (no view is ever created). The rewarded flow
- * intentionally dispatches onRewardedAdEarned so gameplay rewards are not
- * lost.
+ * - Banners are fully suppressed (no view is ever created). The rewarded flow
+ *   intentionally dispatches onRewardedAdEarned so gameplay rewards are not
+ *   lost.
+ * - Yodo1MasThinkingData.initWithAppKey() returns early so the ThinkingData
+ *   SDK (endpoint https://c1.yodo1.com) is never initialized.
  */
 @Suppress("unused")
-val removeAdsPatch = patch(
-    name = "Remove ads",
-    description = "Suppresses Yodo1 MAS banners, interstitials, rewarded videos and app-open ads, including the preloads done at SDK init. Rewarded flows still grant their in-game reward.",
+val removeYodo1AdsAndAnalyticsPatch = patch(
+    name = "Remove Yodo1 ads and analytics",
+    description = "Suppresses Yodo1 MAS banners, interstitials, rewarded videos, app-open ads (including SDK init preloads), and stops the bundled ThinkingData analytics tracker (c1.yodo1.com). Rewarded flows still grant their in-game reward.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_WRESTLINGREVOLUTION)
@@ -73,7 +75,7 @@ val removeAdsPatch = patch(
                 """.trimIndent(),
             )
         }.onFailure {
-            println("Remove ads: handleInitSuccess not patched (${it.message})")
+            println("Remove Yodo1 ads and analytics: handleInitSuccess not patched (${it.message})")
         }
 
         // 2. Interstitial.
@@ -88,7 +90,7 @@ val removeAdsPatch = patch(
             )
             Yodo1IsInterstitialLoadedFingerprint.method.addInstructions(0, RETURN_TRUE)
         }.onFailure {
-            println("Remove ads: interstitial not patched (${it.message})")
+            println("Remove Yodo1 ads and analytics: interstitial not patched (${it.message})")
         }
 
         // 3. Rewarded video (reward is granted without watching).
@@ -103,7 +105,7 @@ val removeAdsPatch = patch(
             )
             Yodo1IsRewardedLoadedFingerprint.method.addInstructions(0, RETURN_TRUE)
         }.onFailure {
-            println("Remove ads: rewarded not patched (${it.message})")
+            println("Remove Yodo1 ads and analytics: rewarded not patched (${it.message})")
         }
 
         // 4. App-open.
@@ -118,7 +120,7 @@ val removeAdsPatch = patch(
             )
             Yodo1IsAppOpenLoadedFingerprint.method.addInstructions(0, RETURN_TRUE)
         }.onFailure {
-            println("Remove ads: app-open not patched (${it.message})")
+            println("Remove Yodo1 ads and analytics: app-open not patched (${it.message})")
         }
 
         // 5. Banners: never create/show a view. Report "loaded" so the game
@@ -130,7 +132,10 @@ val removeAdsPatch = patch(
             Yodo1DestroyBannerFingerprint.method.addInstructions(0, RETURN_VOID)
             Yodo1IsBannerLoadedFingerprint.method.addInstructions(0, RETURN_TRUE)
         }.onFailure {
-            println("Remove ads: banner not patched (${it.message})")
+            println("Remove Yodo1 ads and analytics: banner not patched (${it.message})")
         }
+
+        // 6. Stop the ThinkingData behavioural tracker bundled inside Yodo1 MAS.
+        ThinkingDataInitFingerprint.method.addInstructions(0, RETURN_VOID)
     }
 }
