@@ -20,9 +20,9 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_XRECORDER
 @Suppress("unused")
 val disableRemoteConfigInXRecorderPatch = patch(
     name = "Disable remote config",
-    description = "Experimental: freezes Firebase Remote Config overrides (AdCfg25, ServerDomain) in XRecorder. " +
-        "Server-side features and A/B flags are NOT emulated.",
-    default = false,
+    description = "Freezes Firebase Remote Config overrides (AdCfg25, ServerDomain) in XRecorder. " +
+        "Server-side features and A/B flags are NOT emulated. " + XRECORDER_KNOWN_ISSUE,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_XRECORDER)
 

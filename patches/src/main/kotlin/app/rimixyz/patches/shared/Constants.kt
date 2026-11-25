@@ -109,15 +109,15 @@ object Constants {
         packageName = "videoeditor.videorecorder.screenrecorder",
         apkFileType = ApkFileType.APKM,
         appIconColor = 0x2962FF,
-        signatures = setOf(
-            // SHA-256 do certificado do base.apk (V2/V3, O=VideoStudio), sem os ":" do print-certs.
-            "11D5525D76147B28FC6D974ABC56710576CF14A7CE78CF8E75FD8A67E312CEC0"
-        ),
+        signatures = setOf(XRECORDER_CERT_SHA256),
         targets = listOf(
             // Bundle analisado: SHA-256 abc9e0c7166a3d106e918b5884de717b614ad81508ace6bee67e48b7616c2137.
             // base.apk:          SHA-256 bbbefb52804ba7a16d8c5508ef5b99dc2130cfd899f374867eed8ff5e3eef1b7.
-            // Ainda nao testado em aparelho real: todos os alvos sao experimentais.
-            AppTarget(version = "2.5.6.1", versionCode = 2561002, isExperimental = true)
+            // Testado em aparelho real para gravacao e estado Pro; ver KnownIssue.kt.
+            AppTarget(version = "2.5.6.1", versionCode = 2561002)
         )
     )
+
+    private const val XRECORDER_CERT_SHA256 =
+        "11D5525D76147B28FC6D974ABC56710576CF14A7CE78CF8E75FD8A67E312CEC0"
 }

@@ -33,9 +33,9 @@ private val ADVERTISING_ID_PERMISSIONS = setOf(
 @Suppress("unused")
 val disableTrackingInXRecorderPatch = patch(
     name = "Disable analytics and tracking",
-    description = "Experimental: disables Firebase Analytics, Crashlytics and ad ID permissions in XRecorder. " +
-        "Does not change any server-side feature or account state.",
-    default = false,
+    description = "Disables Firebase Analytics, Crashlytics and ad ID permissions in XRecorder. " +
+        "Does not change any server-side feature or account state. " + XRECORDER_KNOWN_ISSUE,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_XRECORDER)
 
