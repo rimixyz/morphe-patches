@@ -23,9 +23,7 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_XRECORDER
 @Suppress("unused")
 val disableAdsInXRecorderPatch = patch(
     name = "Disable ads",
-    description = "Blocks app-open ad load/show in XRecorder. " +
-        "SDK init is kept because the splash depends on it; ad-free comes from Unlock Pro's IProChecker. " +
-        "Server-side ad decisions are not affected. " + XRECORDER_KNOWN_ISSUE,
+    description = "Blocks ads that appear when opening XRecorder.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_XRECORDER)

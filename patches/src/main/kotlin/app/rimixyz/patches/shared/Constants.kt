@@ -113,7 +113,7 @@ object Constants {
         targets = listOf(
             // Bundle analisado: SHA-256 abc9e0c7166a3d106e918b5884de717b614ad81508ace6bee67e48b7616c2137.
             // base.apk:          SHA-256 bbbefb52804ba7a16d8c5508ef5b99dc2130cfd899f374867eed8ff5e3eef1b7.
-            // Testado em aparelho real para gravacao e estado Pro; ver KnownIssue.kt.
+            // Gravacao e estado Pro testados em aparelho real.
             AppTarget(version = "2.5.6.1", versionCode = 2561002)
         )
     )
