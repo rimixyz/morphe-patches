@@ -72,6 +72,23 @@ object Constants {
         )
     )
 
+    val COMPATIBILITY_NOTISAVE = Compatibility(
+        name = "Notisave",
+        packageName = "com.tenqube.notisave",
+        apkFileType = ApkFileType.APKS,
+        appIconColor = 0x455A64,
+        signatures = setOf(
+            // SHA-256 do signer principal confirmada com apksigner --print-certs no base.apk.
+            // O Source Stamp (3257d599...) é mantido à parte, como nos demais alvos.
+            "792e6242acdb39da3f798e1d841bfb5ad4dfd2eeca17665f3480e402d115c997"
+        ),
+        targets = listOf(
+            // Bundle analisado: SHA-256 DC10DD2CBB23379C25DFE532209F7A5E3F40A9172AC773221C535539F55DD541.
+            // base.apk: AD585A8DC99B42D6CAD3C4F1F6A9BACA8CEBC8CBC1ACD44E517400F38A338C10.
+            AppTarget(version = "274.1.3.2", versionCode = 316)
+        )
+    )
+
     val COMPATIBILITY_AUTOCLICKER = Compatibility(
         name = "Auto Clicker",
         packageName = "com.truedevelopersstudio.automatictap.autoclicker",
