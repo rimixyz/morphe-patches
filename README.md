@@ -38,7 +38,7 @@ Click the button below to add this source directly in **Morphe Manager**, or pas
 ## 🩹 Patches
 
 <!-- PATCHES_START -->
-> **[v1.7.0-dev.1](https://github.com/rimixyz/morphe-patches/releases/tag/v1.7.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;24 patches total
+> **[v1.7.0](https://github.com/rimixyz/morphe-patches/releases/tag/v1.7.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;24 patches total
 <details>
 <summary>📦 HabitNow&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
