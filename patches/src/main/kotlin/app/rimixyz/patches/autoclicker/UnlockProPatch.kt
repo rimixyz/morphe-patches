@@ -32,7 +32,9 @@ private const val PREFS_HELPER = "Lo2/g;"
 @Suppress("unused")
 val unlockProPatch = patch(
     name = "Unlock Pro",
-    description = "Grants the local ad-free/premium state without a purchase.",
+    description = "Grants the local ad-free/premium state without a purchase. " +
+        "REQUIRES Accessibility: on Android 17, disable Advanced Protection or allow restricted settings " +
+        "(Apps > Auto Clicker > menu > Allow restricted settings), then enable the Auto Clicker service.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_AUTOCLICKER)
