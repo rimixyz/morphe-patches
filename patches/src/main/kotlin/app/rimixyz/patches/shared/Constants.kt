@@ -71,4 +71,19 @@ object Constants {
             AppTarget(version = "2.5.5", versionCode = 229)
         )
     )
+
+    val COMPATIBILITY_AUTOCLICKER = Compatibility(
+        name = "Auto Clicker",
+        packageName = "com.truedevelopersstudio.automatictap.autoclicker",
+        apkFileType = ApkFileType.APK,
+        appIconColor = 0x2962FF,
+        signatures = setOf(
+            // SHA-256 do certificado lido de META-INF/GOOGPLAY.RSA com keytool -printcert.
+            "3978336c89d5429f50a756f68582160b0dc0332aa82f7056faa52bfc4fed35a2"
+        ),
+        targets = listOf(
+            // APK analisado: SHA-256 2A48AF68982BFF95588B740AAED2DE2994DD1A26A419CD66DB929B13CEBB3975.
+            AppTarget(version = "2.3.0", versionCode = 93)
+        )
+    )
 }
