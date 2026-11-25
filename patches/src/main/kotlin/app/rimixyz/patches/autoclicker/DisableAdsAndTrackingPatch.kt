@@ -75,9 +75,8 @@ private fun Method.hasAnalyticsEvent() =
 @Suppress("unused")
 val disableAdsAndTrackingPatch = patch(
     name = "Disable ads and tracking",
-    description = "Blocks AdMob banner/interstitial ads and SDK initialization, disables Firebase Analytics and Crashlytics events, and removes advertising ID permissions. " +
-        "REQUIRES Accessibility: on Android 17, disable Advanced Protection or allow restricted settings " +
-        "(Apps > Auto Clicker > menu > Allow restricted settings), then enable the Auto Clicker service.",
+    description = "Blocks ads, analytics, crash reporting, and advertising ID access. " +
+        "Auto Clicker requires Accessibility.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_AUTOCLICKER)
