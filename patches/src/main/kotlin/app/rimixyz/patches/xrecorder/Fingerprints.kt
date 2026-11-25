@@ -18,6 +18,7 @@ private const val APP_OPEN = "Lle;"
 private const val ADMOB_APP_OPEN = "Lqe;"
 private const val ANALYTICS = "Ln12;"
 private const val EVENT_BRIDGE = "Lx8;"
+private const val RECEIPT_UPLOAD = "Ls13;"
 
 /** Chave mestra do estado premium, gravada em PreferenceManager.getDefaultSharedPreferences. */
 internal const val PREMIUM_KEY = "kmgJSgyY"
@@ -211,4 +212,13 @@ internal object RemoteConfigDomainFingerprint : Fingerprint(
     returnType = "V",
     parameters = emptyList(),
     filters = listOf(string("ServerDomain")),
+)
+
+/** URL do endpoint de token de assinatura da InShot. */
+internal object ReceiptEndpointFingerprint : Fingerprint(
+    definingClass = RECEIPT_UPLOAD,
+    name = "j",
+    returnType = "Ljava/lang/String;",
+    parameters = emptyList(),
+    filters = listOf(string("https://cast.inshot.cc/v2/subscription/token/")),
 )

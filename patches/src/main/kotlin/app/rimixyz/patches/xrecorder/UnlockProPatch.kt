@@ -33,9 +33,8 @@ import app.rimixyz.patches.shared.Constants.COMPATIBILITY_XRECORDER
 @Suppress("unused")
 val unlockProInXRecorderPatch = patch(
     name = "Unlock Pro",
-    description = "Unlocks the local Pro state of XRecorder (paywall, locks, ad-free). " +
-        "LOCAL ONLY: server-side AI, credits/quotas and subscription token validation are NOT unlocked. " +
-        XRECORDER_KNOWN_ISSUE,
+    description = "Unlocks local Pro tools and ad-free mode. AI and credits still require server validation. " +
+        "Known issue: the Edit tab closed during testing on a Galaxy A15.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_XRECORDER)
