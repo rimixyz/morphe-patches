@@ -65,6 +65,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -88,6 +89,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -95,6 +97,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -119,6 +123,8 @@ public final class PocoCompatHelper {
             "poco_compat_hide_apps";
     private static final String PREF_KEY_DEFAULT_HOME =
             "poco_compat_default_home";
+    private static final String PREF_KEY_DRAWER_QUICK_SEARCH =
+            "poco_compat_drawer_quick_search";
 
     private static volatile Context sAppContext;
     private static volatile Class<?> sAutoLayoutHostClass;
@@ -1722,7 +1728,108 @@ public final class PocoCompatHelper {
         }
     }
 
+    /**
+     * Negative-caching replacement for {@code miuix.internal.util.ReflectUtil.callObjectMethod},
+     * eliminating uncached reflection + {@code Log.e} stack-trace spam on every MIUIX helper call.
+     */
+    public static Object miuixReflectCallObjectMethod(
+            Object obj,
+            String name,
+            Class<?>[] params,
+            Object... args
+    ) {
+        if (obj == null || name == null) {
+            return null;
+        }
+        Class<?> cls = obj.getClass();
+        Method m = reflectLookupMethod(cls, name, params, true);
+        if (m == null) {
+            m = reflectLookupMethod(cls, name, params, false);
+        }
+        if (m == null) {
+            return null;
+        }
+        try {
+            return m.invoke(obj, args);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Negative-caching replacement for {@code miuix.internal.util.ReflectUtil.callStaticObjectMethod}.
+     */
+    public static Object miuixReflectCallStaticObjectMethod(
+            Class<?> cls,
+            Class<?> retType,
+            String name,
+            Class<?>[] params,
+            Object... args
+    ) {
+        if (cls == null || name == null) {
+            return null;
+        }
+        Method m = reflectLookupMethod(cls, name, params, true);
+        if (m == null) {
+            m = reflectLookupMethod(cls, name, params, false);
+        }
+        if (m == null) {
+            return null;
+        }
+        try {
+            return m.invoke(null, args);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     // ==================== Overlay Client Guards & RAM Trimming ====================
+
+    /**
+     * Allows core worker threads in {@code AsyncTaskExecutorHelper.LAUNCHER_THREAD_POOL_EXECUTOR}
+     * to time out after 30s of inactivity instead of staying permanently pinned when idle.
+     */
+    public static void configureIdleThreadPool(ThreadPoolExecutor executor) {
+        if (executor == null) {
+            return;
+        }
+        try {
+            executor.setKeepAliveTime(30L, TimeUnit.SECONDS);
+            executor.allowCoreThreadTimeOut(true);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Safe, low-overhead replacement for {@code InstallApkReceiver.onReceive}: preserves Google /
+     * Chrome QSB widget recovery on {@code PACKAGE_CHANGED}, skips Amazon Alexa QS-tile spam (and
+     * its NPE on null {@code sysui_qs_tiles}), and avoids waking {@code BackgroundThread} on every
+     * unrelated app install/uninstall.
+     */
+    public static void handleInstallApkBroadcast(Context context, Intent intent) {
+        if (intent == null || !Intent.ACTION_PACKAGE_CHANGED.equals(intent.getAction())) {
+            return;
+        }
+        Uri data = intent.getData();
+        String pkg = data != null ? data.getSchemeSpecificPart() : null;
+        if (!"com.google.android.googlequicksearchbox".equals(pkg)
+                && !"com.android.chrome".equals(pkg)) {
+            return;
+        }
+        final Object launcher = getActiveLauncher();
+        if (launcher == null) {
+            return;
+        }
+        runOnMainThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    invokeZeroArg(launcher, "recreateQsbWidgetIfFailed");
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+    }
 
     /**
      * Skips creating dead Minus-1 overlay {@code LauncherClient} connections (which repeatedly
@@ -1752,17 +1859,30 @@ public final class PocoCompatHelper {
     }
 
     /**
-     * Releases non-essential bitmap, MAML, and file caches when Android trims launcher memory
-     * in background (preserving active desktop icons on {@code TRIM_MEMORY_UI_HIDDEN} so returning
-     * Home stays instantaneous).
+     * Releases non-essential bitmap, spark-pool, MAML, and file caches when Android trims launcher
+     * memory (or after {@code BaseLauncher.onPause()}'s 60s idle background trim), preserving
+     * active desktop icons on {@code TRIM_MEMORY_UI_HIDDEN} so returning Home stays instantaneous.
      */
     public static void onAppTrimMemory(int level) {
-        if (level < ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+        if (level < ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
             return;
         }
         try {
             PocoSettingsCompat.pruneDeadObservers();
         } catch (Throwable ignored) {
+        }
+        // Release static uninstall-particle Spark[2116] pool (2,116 Paint handles + 6,348 properties);
+        // BoomByFolmeAnimator.initBoomSpark() lazily recreates it only if the user uninstalls an app.
+        try {
+            Class<?> boomCls = reflectGetClass("com.miui.home.launcher.uninstall.BoomByFolmeAnimator");
+            Field sparksField = boomCls != null ? reflectGetField(boomCls, "mSparks", null) : null;
+            if (sparksField != null && sparksField.get(null) != null) {
+                sparksField.set(null, null);
+            }
+        } catch (Throwable ignored) {
+        }
+        if (level < ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            return;
         }
         try {
             Class<?> rmCls = reflectGetClass("com.miui.maml.ResourceManager");
@@ -3661,6 +3781,109 @@ public final class PocoCompatHelper {
         }
     }
 
+    /**
+     * Null-safe replacement for {@code BaseLauncher.removeAppWidget(HashSet)}: guards missing
+     * {@code hostView}, {@code AppWidgetProviderInfo}, or {@code provider} so hiding an app never
+     * crashes with {@link NullPointerException} when a placeholder/broken widget is on Home.
+     */
+    public static void safeRemoveAppWidgetsByPackages(Object launcher, HashSet<String> packages) {
+        if (launcher == null || packages == null || packages.isEmpty()) {
+            return;
+        }
+        try {
+            Object widgetItemsObj = readField(launcher, "mWidgetItems");
+            if (!(widgetItemsObj instanceof Iterable)) {
+                return;
+            }
+            Object model = readField(launcher, "mModel");
+            Object workspace = readField(launcher, "mWorkspace");
+            Method deleteFromDb = null;
+            Method removeWidget = null;
+            Class<?> widgetInfoCls = reflectGetClass("com.miui.home.launcher.LauncherAppWidgetInfo");
+            Class<?> itemInfoCls = reflectGetClass("com.miui.home.model.api.ItemInfo");
+            if (model != null && itemInfoCls != null) {
+                deleteFromDb = findMethodInHierarchy(
+                        model.getClass(), "deleteItemFromDatabase", Context.class, itemInfoCls);
+            }
+            if (workspace != null && widgetInfoCls != null) {
+                removeWidget = findMethodInHierarchy(
+                        workspace.getClass(), "removeWidget", widgetInfoCls);
+            }
+            Iterator<?> it = ((Iterable<?>) widgetItemsObj).iterator();
+            while (it.hasNext()) {
+                Object widgetInfo = it.next();
+                if (widgetInfo == null) {
+                    continue;
+                }
+                String pkg = null;
+                Object hostView = readField(widgetInfo, "hostView");
+                if (hostView != null) {
+                    try {
+                        Object appWidgetInfo = invokeZeroArg(hostView, "getAppWidgetInfo");
+                        if (appWidgetInfo instanceof AppWidgetProviderInfo) {
+                            ComponentName provider = ((AppWidgetProviderInfo) appWidgetInfo).provider;
+                            if (provider != null) {
+                                pkg = provider.getPackageName();
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (pkg == null) {
+                    try {
+                        Object providerObj = invokeZeroArg(widgetInfo, "getProvider");
+                        if (providerObj instanceof ComponentName) {
+                            pkg = ((ComponentName) providerObj).getPackageName();
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (pkg == null) {
+                    Object pkgField = readField(widgetInfo, "packageName");
+                    if (pkgField instanceof String) {
+                        pkg = (String) pkgField;
+                    }
+                }
+                if (pkg != null && packages.contains(pkg)) {
+                    if (deleteFromDb != null && launcher instanceof Context) {
+                        try {
+                            deleteFromDb.invoke(model, launcher, widgetInfo);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    it.remove();
+                    if (removeWidget != null) {
+                        try {
+                            removeWidget.invoke(workspace, widgetInfo);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "safeRemoveAppWidgetsByPackages failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Null-safe replacement for the SearchBarContainer reveal in {@code HideAppsSelectView.onShow()}.
+     */
+    public static void safeShowHideAppsSearchBar() {
+        try {
+            Object launcher = getActiveLauncher();
+            if (launcher == null) {
+                return;
+            }
+            Object searchBarContainer = invokeZeroArg(launcher, "getSearchBarContainer");
+            if (searchBarContainer instanceof View) {
+                View view = (View) searchBarContainer;
+                view.setVisibility(View.VISIBLE);
+                view.setAlpha(1.0f);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static void runOnMainThread(Runnable action) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             action.run();
@@ -4451,6 +4674,187 @@ public final class PocoCompatHelper {
             launcher.onSearchRequested();
         } catch (Throwable t) {
             Log.w(TAG, "startGlobalSearchFallback failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Returns whether the "Open search after opening App drawer" setting is enabled locally.
+     */
+    public static boolean isDrawerQuickSearchEnabled() {
+        Context ctx = getAppContext();
+        if (ctx == null) {
+            return false;
+        }
+        try {
+            return PocoSettingsCompat.systemGetInt(
+                    ctx.getContentResolver(), PREF_KEY_DRAWER_QUICK_SEARCH, 0) == 1;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static void setDrawerQuickSearchEnabled(boolean enabled) {
+        Context ctx = getAppContext();
+        if (ctx == null) {
+            return;
+        }
+        try {
+            PocoSettingsCompat.systemPutInt(
+                    ctx.getContentResolver(), PREF_KEY_DRAWER_QUICK_SEARCH, enabled ? 1 : 0);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Replacement for {@code BaseAllAppsSettingsFragment.controlFinderSetting()}: removes the
+     * Xiaomi AppFinder-only in-app query toggle while restoring "Open search after opening App
+     * drawer" backed by POCO's built-in local App Drawer search bar.
+     */
+    public static void setupDrawerQuickSearchPreference(Object fragment) {
+        if (fragment == null) {
+            return;
+        }
+        try {
+            Object drawerSettings = readField(fragment, "mDrawerSettings");
+            Object inAppQuery = readField(fragment, "mInAppQueryMode");
+            Object quickSearch = readField(fragment, "mQuickSearchSetting");
+            Class<?> prefCls = reflectGetClass("androidx.preference.Preference");
+            if (drawerSettings != null && inAppQuery != null && prefCls != null) {
+                Method removePref = findMethodInHierarchy(
+                        drawerSettings.getClass(), "removePreference", prefCls);
+                if (removePref != null) {
+                    removePref.invoke(drawerSettings, inAppQuery);
+                }
+            }
+            if (quickSearch != null) {
+                Method setChecked = findMethodInHierarchy(
+                        quickSearch.getClass(), "setChecked", boolean.class);
+                if (setChecked != null) {
+                    setChecked.invoke(quickSearch, isDrawerQuickSearchEnabled());
+                }
+                Class<?> listenerCls = reflectGetClass(
+                        "androidx.preference.Preference$OnPreferenceChangeListener");
+                if (listenerCls != null && listenerCls.isInstance(fragment)) {
+                    Method setListener = findMethodInHierarchy(
+                            quickSearch.getClass(), "setOnPreferenceChangeListener", listenerCls);
+                    if (setListener != null) {
+                        setListener.invoke(quickSearch, fragment);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "setupDrawerQuickSearchPreference failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Handles changes to the restored {@code key_quick_search_in_drawer} preference inside
+     * {@code BaseAllAppsSettingsFragment.onPreferenceChange}.
+     */
+    public static boolean handleDrawerQuickSearchPreferenceChange(
+            Object fragment,
+            Object preference,
+            Object newValue
+    ) {
+        if (fragment == null || preference == null) {
+            return false;
+        }
+        try {
+            Object quickSearch = readField(fragment, "mQuickSearchSetting");
+            if (quickSearch != null && preference == quickSearch) {
+                setDrawerQuickSearchEnabled(Boolean.TRUE.equals(newValue));
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * Automatically focuses the built-in App Drawer search bar and opens the keyboard when the
+     * user swipes up into the App Drawer with "Open search after opening App drawer" enabled.
+     */
+    public static void maybeOpenDrawerQuickSearch(
+            Object launcherObj,
+            Object fromState
+    ) {
+        if (!isDrawerQuickSearchEnabled() || launcherObj == null) {
+            return;
+        }
+        try {
+            if (launcherObj instanceof Activity) {
+                Activity act = (Activity) launcherObj;
+                if (act.isFinishing() || act.isDestroyed()) {
+                    return;
+                }
+            }
+            Object stateManager = invokeZeroArg(launcherObj, "getStateManager");
+            Object toState = stateManager != null ? invokeZeroArg(stateManager, "getState") : null;
+            if (toState == null || fromState == toState) {
+                return;
+            }
+            Class<?> stateCls = reflectGetClass("com.miui.home.launcher.LauncherState");
+            if (stateCls == null) {
+                return;
+            }
+            Field allAppsField = reflectGetField(stateCls, "ALL_APPS", null);
+            Object allAppsState = allAppsField != null ? allAppsField.get(null) : null;
+            if (allAppsState == null || toState != allAppsState) {
+                return;
+            }
+            Object appsView = invokeZeroArg(launcherObj, "getAppsView");
+            if (appsView != null) {
+                Object hideContainer = readField(appsView, "mHideAppsContainerView");
+                if (hideContainer instanceof View && ((View) hideContainer).getVisibility() == View.VISIBLE) {
+                    return;
+                }
+            }
+            View inputView = null;
+            Object searchBar = invokeZeroArg(launcherObj, "getSearchBar");
+            if (searchBar != null) {
+                Object drawerLayout = invokeZeroArg(searchBar, "getDrawerLayout");
+                if (drawerLayout != null) {
+                    Object input = invokeZeroArg(drawerLayout, "getInput");
+                    if (input instanceof View) {
+                        inputView = (View) input;
+                    }
+                }
+            }
+            if (inputView == null && appsView != null) {
+                Object ctrl = invokeZeroArg(appsView, "getSearchBarController");
+                if (ctrl != null) {
+                    Object input = invokeZeroArg(ctrl, "getInput");
+                    if (input instanceof View) {
+                        inputView = (View) input;
+                    }
+                }
+            }
+            if (inputView == null) {
+                return;
+            }
+            final View targetInput = inputView;
+            targetInput.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (!targetInput.isAttachedToWindow()) {
+                            return;
+                        }
+                        targetInput.requestFocus();
+                        Context ctx = targetInput.getContext();
+                        if (ctx != null) {
+                            InputMethodManager imm = (InputMethodManager)
+                                    ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+                            if (imm != null) {
+                                imm.showSoftInput(targetInput, InputMethodManager.SHOW_IMPLICIT);
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            Log.w(TAG, "maybeOpenDrawerQuickSearch failed: " + t.getMessage());
         }
     }
 

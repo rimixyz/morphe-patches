@@ -952,9 +952,13 @@ private fun patchHiddenApisAndBootCollisions() {
     )
 
     // 5d. ActivityManagerWrapper.trimMemory (WindowManagerGlobal.trimMemory is max-target-p).
+    //     Route BaseLauncher.onPause()'s 60s idle trimMemory(20) to PocoCompatHelper.onAppTrimMemory.
     ActivityManagerWrapperTrimMemoryFingerprint.method.replaceBody(
         locals = 0,
-        smali = "return-void",
+        smali = """
+            invoke-static { p1 }, $COMPAT_HELPER->onAppTrimMemory(I)V
+            return-void
+        """.trimIndent(),
     )
 
     // 5e. ActivityManagerWrapper.getComponentName(ActivityInfo) (ActivityInfo.getComponentName is hidden).
@@ -1364,15 +1368,45 @@ private fun patchBlockedShellTransitionsAndStubs() {
 
     // 3. RemoteAnimationFinishCallbackManager & WindowTransitionCallbackHelper:
     //    Called on every BaseLauncher.onNewIntent (Home press). Null out blocked
-    //    IWindowContainerTransactionCallback$Stub anonymous subclass instantiations while keeping
-    //    mWorkThread / mWorkHandler / mLock intact.
+    //    IWindowContainerTransactionCallback$Stub anonymous subclass instantiations and reuse
+    //    BackgroundThread instead of spawning a permanently-resident "HomeShellAnim" HandlerThread.
     val finishCbMgr = mutableClassDefBy(
         "Lcom/android/systemui/shared/recents/utilities/RemoteAnimationFinishCallbackManager;",
     )
+    val finishCtor = finishCbMgr.findMethodOrThrow("<init>", emptyList(), "V")
     nullOutBlockedInstanceInit(
-        finishCbMgr.findMethodOrThrow("<init>", emptyList(), "V"),
+        finishCtor,
         "Lcom/android/systemui/shared/recents/utilities/RemoteAnimationFinishCallbackManager\$1;",
     )
+    val finishInsns = finishCtor.instructions.toList()
+    val htNewIdx = finishInsns.indexOfFirst { ins ->
+        ins.opcode == Opcode.NEW_INSTANCE &&
+            ((ins as? ReferenceInstruction)?.reference as? TypeReference)?.type == "Landroid/os/HandlerThread;"
+    }
+    check(htNewIdx >= 0) {
+        "POCO Launcher: new-instance HandlerThread não encontrado em RemoteAnimationFinishCallbackManager.<init>"
+    }
+    val putHandlerIdx = (htNewIdx + 1 until minOf(htNewIdx + 16, finishInsns.size)).firstOrNull { idx ->
+        finishInsns[idx].opcode == Opcode.IPUT_OBJECT &&
+            ((finishInsns[idx] as? ReferenceInstruction)?.reference as? FieldReference)?.name == "mWorkHandler"
+    } ?: throw PatchException(
+        "POCO Launcher: iput-object mWorkHandler não encontrado em RemoteAnimationFinishCallbackManager.<init>",
+    )
+    val htScratchReg = (finishInsns[htNewIdx] as OneRegisterInstruction).registerA
+    for (idx in putHandlerIdx downTo htNewIdx + 1) {
+        finishCtor.removeInstruction(idx)
+    }
+    finishCtor.addInstructions(
+        htNewIdx + 1,
+        """
+            iput-object v$htScratchReg, p0, Lcom/android/systemui/shared/recents/utilities/RemoteAnimationFinishCallbackManager;->mWorkThread:Landroid/os/HandlerThread;
+            invoke-static { }, Lcom/miui/home/common/multithread/BackgroundThread;->getHandler()Landroid/os/Handler;
+            move-result-object v$htScratchReg
+            iput-object v$htScratchReg, p0, Lcom/android/systemui/shared/recents/utilities/RemoteAnimationFinishCallbackManager;->mWorkHandler:Landroid/os/Handler;
+        """.trimIndent(),
+    )
+    val zeroHtIns = if (htScratchReg < 16) "const/4 v$htScratchReg, 0x0" else "const/16 v$htScratchReg, 0x0"
+    finishCtor.replaceInstruction(htNewIdx, zeroHtIns)
 
     val winTransHelper = mutableClassDefBy(
         "Lcom/android/systemui/shared/recents/utilities/WindowTransitionCallbackHelper;",
@@ -2363,6 +2397,175 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
         """.trimIndent(),
         ExternalLabel("continue_finder_client", firstFinderClientInsn),
     )
+
+    // 8. Negative-cache miuix.internal.util.ReflectUtil to eliminate uncached reflection & Log.e
+    //    stack-trace spam from MIUIX helpers (MiMotionHelper, NumberPicker, CornerRadiusUtils, etc.).
+    val miuixReflect = mutableClassDefBy("Lmiuix/internal/util/ReflectUtil;")
+    miuixReflect.findMethodOrThrow("getClass", listOf("Ljava/lang/String;"), "Ljava/lang/Class;")
+        .replaceBody(
+            locals = 1,
+            smali = """
+                invoke-static { p0 }, $COMPAT_HELPER->reflectGetClass(Ljava/lang/String;)Ljava/lang/Class;
+                move-result-object v0
+                return-object v0
+            """.trimIndent(),
+        )
+    miuixReflect.findMethodOrThrow(
+        "callObjectMethod",
+        listOf("Ljava/lang/Object;", "Ljava/lang/String;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3 }, $COMPAT_HELPER->miuixReflectCallObjectMethod(Ljava/lang/Object;Ljava/lang/String;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    miuixReflect.findMethodOrThrow(
+        "callStaticObjectMethod",
+        listOf("Ljava/lang/Class;", "Ljava/lang/Class;", "Ljava/lang/String;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3, p4 }, $COMPAT_HELPER->miuixReflectCallStaticObjectMethod(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+
+    // 9. Eliminate permanently-resident delayReportHandlerThread, disk cache I/O, and 30s report timers.
+    val delayReport = mutableClassDefBy("Lcom/miui/home/launcher/util/TrackerDataDelayReportHelper;")
+    delayReport.findMethodOrThrow("init", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    delayReport.findMethodOrThrow("handleNewTrackData", listOf("Ljava/util/Map;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    delayReport.findMethodOrThrow("trackReport", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    // 10. Eliminate 8,500+ boot-pinned uninstall spark objects & 2,116 native Skia Paint handles
+    //     (BoomByFolmeAnimator.initBoomSpark() already lazily allocates them on first uninstall).
+    val appClass = mutableClassDefBy("Lcom/miui/home/launcher/Application;")
+    appClass.findMethodOrThrow("initBoomObject", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    // 11. Avoid spawning & waking ProgressManager's SingleThreadExecutor on every Home press when
+    //     no MIUI GetApps/GameCenter install progress servers are active.
+    val progressProc = mutableClassDefBy("Lcom/miui/home/launcher/progress/ApplicationProgressProcessor;")
+    val progressStart = progressProc.findMethodOrThrow("start", emptyList(), "V")
+    val firstProgressStartInsn = progressStart.instructions.first()
+    progressStart.addInstructionsWithLabels(
+        0,
+        """
+            const/4 v0, 0x0
+            iput-boolean v0, p0, Lcom/miui/home/launcher/progress/ApplicationProgressProcessor;->mIsStop:Z
+            iget-object v0, p0, Lcom/miui/home/launcher/progress/ApplicationProgressProcessor;->mAllServersProgressMap:Ljava/util/HashMap;
+            if-eqz v0, :skip_progress_start
+            invoke-virtual { v0 }, Ljava/util/HashMap;->isEmpty()Z
+            move-result v0
+            if-eqz v0, :continue_progress_start
+            :skip_progress_start
+            return-void
+        """.trimIndent(),
+        ExternalLabel("continue_progress_start", firstProgressStartInsn),
+    )
+
+    // 12. Allow core LauncherTask #1..4 worker threads to time out after 30s when idle.
+    val asyncHelper = mutableClassDefBy("Lcom/miui/home/library/utils/AsyncTaskExecutorHelper;")
+    val initDefExec = asyncHelper.findMethodOrThrow("initDefaultExecutor", emptyList(), "V")
+    val initDefReturns = initDefExec.instructions.withIndex()
+        .filter { it.value.opcode == Opcode.RETURN_VOID }
+        .map { it.index }
+        .asReversed()
+    check(initDefReturns.isNotEmpty()) {
+        "POCO Launcher: return-void não encontrado em AsyncTaskExecutorHelper.initDefaultExecutor"
+    }
+    for (retIdx in initDefReturns) {
+        initDefExec.addInstructionsAtControlFlowLabel(
+            retIdx,
+            """
+                sget-object v0, Lcom/miui/home/library/utils/AsyncTaskExecutorHelper;->LAUNCHER_THREAD_POOL_EXECUTOR:Ljava/util/concurrent/ThreadPoolExecutor;
+                invoke-static { v0 }, $COMPAT_HELPER->configureIdleThreadPool(Ljava/util/concurrent/ThreadPoolExecutor;)V
+            """.trimIndent(),
+        )
+    }
+
+    // 13. Prevent GlobalExecutors.THREAD_POOL_IO boot spin-up & dead per-onStart BackgroundThread tasks.
+    val initHomeFinder = finderCtrl.findMethodOrThrow("initHomeFinder", listOf("Z"), "V")
+    val firstInitFinderInsn = initHomeFinder.instructions.first()
+    initHomeFinder.addInstructionsWithLabels(
+        0,
+        """
+            iget-object v0, p0, Lcom/mi/appfinder/launcher/FinderController;->mApplication:Landroid/app/Application;
+            invoke-static { v0 }, $COMPAT_HELPER->shouldCreateAppFinderClient(Landroid/content/Context;)Z
+            move-result v0
+            if-nez v0, :continue_init_finder
+            return-void
+        """.trimIndent(),
+        ExternalLabel("continue_init_finder", firstInitFinderInsn),
+    )
+    baseLauncher.findMethodOrThrow("onStartAsync", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    // 14. Eliminate per-onPause 5s UI-thread timer + SharedPrefs churn, per-onResume dead MIUI
+    //     APPLICATION_MESSAGE_QUERY broadcast, per-scroll-pixel UI-thread DateTimeFormatter work,
+    //     Alexa QS-tile NPE/spam, dead MIUI thermal broadcasts, 5 dead Minus-1 observers, and
+    //     dead Recents package-change wakeups.
+    sdReplace.findMethodOrThrow("sendCallbacks", listOf("Landroid/os/Handler;", "I"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    sdReplace.findMethodOrThrow("removeCallbacks", listOf("Landroid/os/Handler;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val appMsgQuery = mutableClassDefBy("Lcom/miui/home/launcher/ApplicationsMessage\$2;")
+    appMsgQuery.findMethodOrThrow("run", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val homeLog = mutableClassDefBy("Lcom/miui/home/common/MiuiHomeLog;")
+    homeLog.findMethodOrThrow("saveRecorded", listOf("Ljava/lang/String;", "Ljava/lang/String;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    homeLog.findMethodOrThrow("setHead", listOf("Ljava/lang/String;", "Ljava/lang/String;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val installApkReceiver = mutableClassDefBy("Lcom/miui/home/launcher/install/InstallApkReceiver;")
+    installApkReceiver.findMethodOrThrow(
+        "onReceive",
+        listOf("Landroid/content/Context;", "Landroid/content/Intent;"),
+        "V",
+    ).replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { p1, p2 }, $COMPAT_HELPER->handleInstallApkBroadcast(Landroid/content/Context;Landroid/content/Intent;)V
+            return-void
+        """.trimIndent(),
+    )
+
+    val appUsageMonitor = mutableClassDefBy("Lcom/miui/home/launcher/AppUsageMonitor;")
+    appUsageMonitor.findMethodOrThrow("onAppOpened", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val assistantWrap = mutableClassDefBy("Lcom/miui/home/launcher/AssistantLauncherCallbacksWrap;")
+    val regAssistantObs = assistantWrap.findMethodOrThrow("registerObserver", emptyList(), "V")
+    val firstRegObsInsn = regAssistantObs.instructions.first()
+    regAssistantObs.addInstructionsWithLabels(
+        0,
+        """
+            iget-object v0, p0, Lcom/miui/home/launcher/overlay/OverlayLauncherCallbacks;->mLauncher:Lcom/miui/home/launcher/BaseLauncher;
+            const/4 v1, 0x0
+            invoke-static { v0, v1 }, $COMPAT_HELPER->shouldCreateMinusScreenClient(Landroid/content/Context;Ljava/lang/String;)Z
+            move-result v0
+            if-nez v0, :continue_assistant_observers
+            return-void
+        """.trimIndent(),
+        ExternalLabel("continue_assistant_observers", firstRegObsInsn),
+    )
+
+    val recentsPkgCb = mutableClassDefBy("Lcom/android/systemui/shared/recents/model/RecentsTaskLoader\$2;")
+    recentsPkgCb.findMethodOrThrow(
+        "onPackageChanged",
+        listOf("Ljava/lang/String;", "Landroid/os/UserHandle;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
 }
 
 // ==================== 7. Native Non-Xiaomi UX (Widgets, Uninstall, Wallpaper) ====================
@@ -2943,6 +3146,144 @@ private fun patchNonXiaomiSettingsAndFallbacks() {
             return-void
         """.trimIndent(),
     )
+
+    // 9. Unlock "On widgets" ("Em widgets") option inside "Don't show text" (works on all standard
+    //    Android AppWidgets; was only hidden because isOnlyWidgetNoWordModelSupport() checked MIUIWidgetUtil).
+    val launcherUtilities = mutableClassDefBy("Lcom/miui/home/launcher/common/Utilities;")
+    launcherUtilities.findMethodOrThrow("isOnlyWidgetNoWordModelSupport", emptyList(), "Z")
+        .replaceBody(locals = 1, smali = returnTrueSmali)
+
+    // 10. Unlock HyperOS 3 "Home screen search" settings page & floating "Search" capsule pill
+    //     ("Compact search" / "Pesquisa compacta", type 2 above dock; tapping launches Google Search
+    //     fallback). Keep default = 0 (Off) so users opt in cleanly without unexpected layout shifts.
+    val searchStrategyFactory = mutableClassDefBy(
+        "Lcom/miui/home/settings/DefaultSearchSettingsStrategyFactory;",
+    )
+    searchStrategyFactory.findMethodOrThrow(
+        "createStrategy",
+        listOf(
+            "Landroid/content/Context;",
+            "Lcom/miui/home/settings/preference/ValuePreference;",
+            "Lcom/miui/home/settings/preference/CheckBoxPreference;",
+            "Landroidx/preference/Preference\$OnPreferenceChangeListener;",
+        ),
+        "Lcom/miui/home/settings/BaseSearchSettingsStrategy;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            new-instance v0, Lcom/miui/home/settings/SearchSettingsStrategyOS3;
+            invoke-direct { v0, p1, p2 }, Lcom/miui/home/settings/SearchSettingsStrategyOS3;-><init>(Landroid/content/Context;Lcom/miui/home/settings/preference/ValuePreference;)V
+            return-object v0
+        """.trimIndent(),
+    )
+
+    val returnZeroIntSmali = """
+        const/4 v0, 0x0
+        return v0
+    """.trimIndent()
+    val searchBarConfig = mutableClassDefBy("Lcom/miui/home/common/searchbarconfig/SearchBarConfig;")
+    searchBarConfig.findMethodOrThrow("lambda\$static\$1", emptyList(), "Z")
+        .replaceBody(locals = 1, smali = returnTrueSmali)
+    searchBarConfig.findMethodOrThrow("getDefaultSearchBarType", emptyList(), "I")
+        .replaceBody(locals = 1, smali = returnZeroIntSmali)
+    searchBarConfig.findMethodOrThrow("getLegacyDefaultSearchBarType", emptyList(), "I")
+        .replaceBody(locals = 1, smali = returnZeroIntSmali)
+
+    // 11. Restore "Open search after opening App drawer" ("Abrir pesquisa após abrir a Gaveta de
+    //     apps") backed by POCO's built-in local App Drawer search bar instead of absent AppFinder.
+    val baseAllAppsSettings = mutableClassDefBy("Lcom/miui/home/settings/BaseAllAppsSettingsFragment;")
+    baseAllAppsSettings.findMethodOrThrow("controlFinderSetting", emptyList(), "V").replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { p0 }, $COMPAT_HELPER->setupDrawerQuickSearchPreference(Ljava/lang/Object;)V
+            return-void
+        """.trimIndent(),
+    )
+    val drawerPrefChange = baseAllAppsSettings.findMethodOrThrow(
+        "onPreferenceChange",
+        listOf("Landroidx/preference/Preference;", "Ljava/lang/Object;"),
+        "Z",
+    )
+    val firstDrawerPrefInsn = drawerPrefChange.instructions.first()
+    drawerPrefChange.addInstructionsWithLabels(
+        0,
+        """
+            invoke-static { p0, p1, p2 }, $COMPAT_HELPER->handleDrawerQuickSearchPreferenceChange(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z
+            move-result v0
+            if-eqz v0, :continue_drawer_pref_change
+            const/4 v0, 0x1
+            return v0
+        """.trimIndent(),
+        ExternalLabel("continue_drawer_pref_change", firstDrawerPrefInsn),
+    )
+
+    val allAppsSwipe = mutableClassDefBy("Lcom/miui/home/launcher/uioverrides/AllAppsSwipeController;")
+    val onSwipeDone = allAppsSwipe.methods.firstOrNull {
+        it.name == "onSwipeInteractionCompleted" &&
+            it.parameterTypes.map(CharSequence::toString) == listOf("Lcom/miui/home/launcher/LauncherState;") &&
+            it.returnType == "V"
+    } ?: allAppsSwipe.findMethodOrThrow(
+        "lambda\$onDragEnd\$0",
+        listOf("Lcom/miui/home/launcher/LauncherState;"),
+        "V",
+    )
+    val swipeDoneReturns = onSwipeDone.instructions.withIndex()
+        .filter { it.value.opcode == Opcode.RETURN_VOID }
+        .map { it.index }
+        .asReversed()
+    check(swipeDoneReturns.isNotEmpty()) {
+        "POCO Launcher: return-void não encontrado em AllAppsSwipeController.${onSwipeDone.name}"
+    }
+    for (retIdx in swipeDoneReturns) {
+        onSwipeDone.addInstructionsAtControlFlowLabel(
+            retIdx,
+            """
+                iget-object v0, p0, Lcom/miui/home/launcher/uioverrides/AllAppsSwipeController;->mLauncher:Lcom/miui/home/launcher/BaseLauncher;
+                iget-object v1, p0, Lcom/miui/home/launcher/uioverrides/AllAppsSwipeController;->mFromState:Lcom/miui/home/launcher/LauncherState;
+                invoke-static { v0, v1 }, $COMPAT_HELPER->maybeOpenDrawerQuickSearch(Ljava/lang/Object;Ljava/lang/Object;)V
+            """.trimIndent(),
+        )
+    }
+
+    // 12. Eliminate 400ms unlock-animation lag & dead BoostRtHelper call caused by
+    //     HyperOsVersionUtils.ATLEAST_MIUI_13 == false on non-Xiaomi Android 12+ devices.
+    val unlockSm = mutableClassDefBy("Lcom/miui/home/launcher/common/UnlockAnimationStateMachine;")
+    val unlockResume = unlockSm.findMethodOrThrow("onResume", emptyList(), "V")
+    val unlockInsns = unlockResume.instructions.toList()
+    val miui13Idx = unlockInsns.indexOfFirst { ins ->
+        ins.opcode == Opcode.SGET_BOOLEAN &&
+            ((ins as? ReferenceInstruction)?.reference as? FieldReference)?.let {
+                it.definingClass == "Lcom/miui/home/common/utils/HyperOsVersionUtils;" &&
+                    it.name == "ATLEAST_MIUI_13"
+            } == true
+    }
+    check(miui13Idx >= 0) {
+        "POCO Launcher: sget-boolean HyperOsVersionUtils.ATLEAST_MIUI_13 não encontrado em UnlockAnimationStateMachine.onResume"
+    }
+    val miui13Reg = (unlockInsns[miui13Idx] as OneRegisterInstruction).registerA
+    unlockResume.replaceInstruction(miui13Idx, "const/4 v$miui13Reg, 0x1")
+
+    // 13. Unlock HyperOS 2/3 proportional rounded widget corners (16dp dense / 20dp standard)
+    //     gated on HyperOsVersionUtils.ATLEAST_OS2.
+    val cornerEnforce = mutableClassDefBy("Lcom/miui/home/common/widget/RoundedCornerEnforcement;")
+    val computeRadius = cornerEnforce.findMethodOrThrow(
+        "computeEnforcedRadius",
+        listOf("Landroid/content/Context;"),
+        "F",
+    )
+    val cornerInsns = computeRadius.instructions.toList()
+    val os2Idx = cornerInsns.indexOfFirst { ins ->
+        ins.opcode == Opcode.SGET_BOOLEAN &&
+            ((ins as? ReferenceInstruction)?.reference as? FieldReference)?.let {
+                it.definingClass == "Lcom/miui/home/common/utils/HyperOsVersionUtils;" &&
+                    it.name == "ATLEAST_OS2"
+            } == true
+    }
+    check(os2Idx >= 0) {
+        "POCO Launcher: sget-boolean HyperOsVersionUtils.ATLEAST_OS2 não encontrado em RoundedCornerEnforcement.computeEnforcedRadius"
+    }
+    val os2Reg = (cornerInsns[os2Idx] as OneRegisterInstruction).registerA
+    computeRadius.replaceInstruction(os2Idx, "const/4 v$os2Reg, 0x1")
 }
 
 private fun patchHideAppsFeature() {
@@ -3215,6 +3556,108 @@ private fun patchHideAppsFeature() {
             0,
             "invoke-static { p0 }, $COMPAT_HELPER->ensureHideAppsListSynced(Landroid/view/View;)V",
         )
+
+    // 12. HideAppsGridAdapter: FIX EXACT "Add app" CRASH!
+    //     Stock onCreateViewHolder inflated obsolete R$layout.application_all_hide_app which still
+    //     nested child views inside <AppIcon> (now a flat TextView, NOT a ViewGroup -> guaranteed
+    //     ClassCastException: AppIcon cannot be cast to ViewGroup!). Delegate to super which inflates
+    //     R$layout.single_all_apps_application. In onBindViewHolder, toggle Canvas-drawn checkbox via
+    //     quickHideOrShowCheckbox(isDefaultCheckBoxShow()) so checkboxes appear in "Add app" even when
+    //     "Lock Home screen layout" is enabled AND never leak onto Page 0 (the Hidden Apps vault).
+    val hideGridAdapter = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsGridAdapter;",
+    )
+    hideGridAdapter.findMethodOrThrow(
+        "onCreateViewHolder",
+        listOf("Landroid/view/ViewGroup;", "I"),
+        "Lcom/miui/home/launcher/allapps/AllAppsGridAdapter\$ViewHolder;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-super { p0, p1, p2 }, Lcom/miui/home/launcher/allapps/AllAppsGridAdapter;->onCreateViewHolder(Landroid/view/ViewGroup;I)Lcom/miui/home/launcher/allapps/AllAppsGridAdapter${'$'}ViewHolder;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    hideGridAdapter.findMethodOrThrow(
+        "onBindViewHolder",
+        listOf("Lcom/miui/home/launcher/allapps/AllAppsGridAdapter\$ViewHolder;", "I"),
+        "V",
+    ).replaceBody(
+        locals = 4,
+        smali = """
+            invoke-super { p0, p1, p2 }, Lcom/miui/home/launcher/allapps/AllAppsGridAdapter;->onBindViewHolder(Lcom/miui/home/launcher/allapps/AllAppsGridAdapter${'$'}ViewHolder;I)V
+            invoke-virtual { p1 }, Landroidx/recyclerview/widget/RecyclerView${'$'}ViewHolder;->getItemViewType()I
+            move-result v0
+            const/4 v1, 0x2
+            if-ne v0, v1, :done
+            iget-object v0, p1, Landroidx/recyclerview/widget/RecyclerView${'$'}ViewHolder;->itemView:Landroid/view/View;
+            instance-of v1, v0, Lcom/miui/home/launcher/ShortcutIcon;
+            if-eqz v1, :done
+            check-cast v0, Lcom/miui/home/launcher/ShortcutIcon;
+            invoke-virtual { p0 }, Lcom/miui/home/launcher/allapps/hideapps/HideAppsGridAdapter;->isDefaultCheckBoxShow()Z
+            move-result v1
+            invoke-virtual { v0, v1 }, Lcom/miui/home/launcher/ShortcutIcon;->quickHideOrShowCheckbox(Z)V
+            const/4 v2, 0x0
+            if-eqz v1, :apply_check
+            invoke-virtual { p0, p2 }, Lcom/miui/home/launcher/allapps/AllAppsGridAdapter;->getItem(I)Lcom/miui/home/launcher/allapps/BaseAlphabeticalAppsList${'$'}AdapterItem;
+            move-result-object v3
+            if-eqz v3, :apply_check
+            iget-object v3, v3, Lcom/miui/home/launcher/allapps/BaseAlphabeticalAppsList${'$'}AdapterItem;->appInfo:Lcom/miui/home/launcher/AppInfo;
+            if-eqz v3, :apply_check
+            invoke-virtual { v3 }, Lcom/miui/home/launcher/AppInfo;->isChecked()Z
+            move-result v2
+            :apply_check
+            invoke-virtual { v0, v2 }, Lcom/miui/home/launcher/ShortcutIcon;->checkCheckBox(Z)V
+            :done
+            return-void
+        """.trimIndent(),
+    )
+
+    // 13. AllAppsNormalContainerView.updateColorForUiMode: always match HideAppsContentBaseView's
+    //     solid system Dark/Light background (AllAppsSheet.COLOR_MODE, 255) instead of drawer theme.
+    val hideNormalContainer = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/AllAppsNormalContainerView;",
+    )
+    hideNormalContainer.findMethodOrThrow("updateColorForUiMode", emptyList(), "V").replaceBody(
+        locals = 3,
+        smali = """
+            sget-object v0, Lcom/miui/home/launcher/allapps/AllAppsSheet;->COLOR_MODE:Lcom/miui/home/launcher/allapps/AllAppsColorMode;
+            const/16 v1, 0xff
+            iget-object v2, p0, Lcom/miui/home/launcher/allapps/hideapps/AllAppsNormalContainerView;->mAdapter:Lcom/miui/home/launcher/allapps/hideapps/HideAppsGridAdapter;
+            if-eqz v2, :skip_adapter
+            invoke-virtual { v2, v0, v1 }, Lcom/miui/home/launcher/allapps/AllAppsGridAdapter;->updateStyle(Lcom/miui/home/launcher/allapps/AllAppsColorMode;I)V
+            :skip_adapter
+            iget-object v2, p0, Lcom/miui/home/launcher/allapps/hideapps/AllAppsNormalContainerView;->mAllAppsRecyclerView:Lcom/miui/home/launcher/allapps/hideapps/HideAppsRecyclerView;
+            if-eqz v2, :done
+            invoke-virtual { v2, v0, v1 }, Lcom/miui/home/launcher/allapps/AllAppsRecyclerView;->onColorModeChange(Lcom/miui/home/launcher/allapps/AllAppsColorMode;I)V
+            :done
+            return-void
+        """.trimIndent(),
+    )
+
+    // 14. BaseLauncher.removeAppWidget(HashSet) & HideAppsSelectView.onShow(): guard NPEs on
+    //     broken/placeholder widgets when hiding an app and on null SearchBarContainer.
+    val baseLauncher = mutableClassDefBy("Lcom/miui/home/launcher/BaseLauncher;")
+    baseLauncher.findMethodOrThrow("removeAppWidget", listOf("Ljava/util/HashSet;"), "V").replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { p0, p1 }, $COMPAT_HELPER->safeRemoveAppWidgetsByPackages(Ljava/lang/Object;Ljava/util/HashSet;)V
+            return-void
+        """.trimIndent(),
+    )
+
+    val hideSelectView = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsSelectView;",
+    )
+    hideSelectView.findMethodOrThrow("onShow", emptyList(), "V").replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { }, $COMPAT_HELPER->safeShowHideAppsSearchBar()V
+            invoke-direct { p0 }, Lcom/miui/home/launcher/allapps/hideapps/HideAppsSelectView;->refreshData()V
+            return-void
+        """.trimIndent(),
+    )
 }
 
 private fun patchWallpaperIntegration() {
