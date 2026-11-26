@@ -38,7 +38,7 @@ Clique no botão abaixo para adicionar esta fonte direto no **Morphe Manager**, 
 ## 🩹 Patches
 
 <!-- PATCHES_START -->
-> **[v1.9.0-dev.1](https://github.com/rimixyz/morphe-patches/releases/tag/v1.9.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;35 patches total
+> **[v1.9.0-dev.2](https://github.com/rimixyz/morphe-patches/releases/tag/v1.9.0-dev.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;35 patches total
 <details>
 <summary>📦 HabitNow&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>

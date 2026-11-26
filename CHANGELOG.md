@@ -1,3 +1,9 @@
+## [1.9.0-dev.2](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.1...v1.9.0-dev.2) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **POCO Launcher:** fix Hide Apps password setup flow and deeply optimize CPU, RAM, and battery ([151d522](https://github.com/rimixyz/morphe-patches/commit/151d522ef93482b9e51e93ecfc712759922b325f))
+
 ## [1.9.0-dev.1](https://github.com/rimixyz/morphe-patches/compare/v1.8.0...v1.9.0-dev.1) (2026-11-26)
 
 ### ✨ New Features
