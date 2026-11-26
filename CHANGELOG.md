@@ -1,3 +1,9 @@
+## [1.9.0-dev.4](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.3...v1.9.0-dev.4) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **poco-launcher:** fix VerifyError on launch in AssistantLauncherCallbacksWrap.registerObserver ([2e95fc4](https://github.com/rimixyz/morphe-patches/commit/2e95fc4f907d90c3a4c2c1a8d270adde415cd73f))
+
 ## [1.9.0-dev.3](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.2...v1.9.0-dev.3) (2026-11-26)
 
 ### 🐛 Bug Fixes
