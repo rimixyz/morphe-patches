@@ -1,3 +1,33 @@
+## [1.9.0-dev.5](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.4...v1.9.0-dev.5) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **poco-launcher:** fix uninstall, status bar scrim, nav mode label, and expand home grids ([05dae64](https://github.com/rimixyz/morphe-patches/commit/05dae64ddda529002f2753e9ef6c8fa35f08076e))
+
+## [1.9.0-dev.4](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.3...v1.9.0-dev.4) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **poco-launcher:** fix VerifyError on launch in AssistantLauncherCallbacksWrap.registerObserver ([2e95fc4](https://github.com/rimixyz/morphe-patches/commit/2e95fc4f907d90c3a4c2c1a8d270adde415cd73f))
+
+## [1.9.0-dev.3](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.2...v1.9.0-dev.3) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **poco-launcher:** fix Hide Apps add-app crash, optimize CPU/RAM/battery, and unlock hidden HyperOS 3 features ([9a5dc31](https://github.com/rimixyz/morphe-patches/commit/9a5dc31e5fea78719f01245fab31904c360ebcb3))
+
+## [1.9.0-dev.2](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.1...v1.9.0-dev.2) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **POCO Launcher:** fix Hide Apps password setup flow and deeply optimize CPU, RAM, and battery ([151d522](https://github.com/rimixyz/morphe-patches/commit/151d522ef93482b9e51e93ecfc712759922b325f))
+
+## [1.9.0-dev.1](https://github.com/rimixyz/morphe-patches/compare/v1.8.0...v1.9.0-dev.1) (2026-11-26)
+
+### ✨ New Features
+
+* add POCO Launcher non-Xiaomi compatibility patch ([a8d0744](https://github.com/rimixyz/morphe-patches/commit/a8d07449eb07257e2cddba5374ea003893137b8f))
+
 ## [1.8.0](https://github.com/rimixyz/morphe-patches/compare/v1.7.0...v1.8.0) (2026-11-25)
 
 ### ✨ New Features

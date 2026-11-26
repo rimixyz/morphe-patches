@@ -118,6 +118,40 @@ object Constants {
         )
     )
 
+    /**
+     * Compatibilidade separada apenas para Disable receipt upload, o unico patch
+     * ainda nao testado em execucao e marcado como experimental.
+     */
+    val COMPATIBILITY_XRECORDER_EXPERIMENTAL = Compatibility(
+        name = "XRecorder",
+        packageName = "videoeditor.videorecorder.screenrecorder",
+        apkFileType = ApkFileType.APKM,
+        appIconColor = 0x2962FF,
+        signatures = setOf(XRECORDER_CERT_SHA256),
+        targets = listOf(
+            AppTarget(version = "2.5.6.1", versionCode = 2561002, isExperimental = true)
+        )
+    )
+
+    val COMPATIBILITY_POCOLAUNCHER = Compatibility(
+        name = "POCO Launcher",
+        packageName = "com.mi.android.globallauncher",
+        apkFileType = ApkFileType.APK,
+        appIconColor = 0xFFD400,
+        signatures = setOf(
+            // SHA-256 do certificado do APK analisado (v1/v2/v3 Xiaomi).
+            "c9009d01ebf9f5d0302bc71b2fe9aa9a47a432bba17308a3111b75d7b2149025"
+        ),
+        targets = listOf(
+            // APK analisado: SHA-256 6b7404669c2f5005d3a3e9e12a42fe9be5c92566730f7d7f94469d0fa87b5ace.
+            AppTarget(
+                version = "RELEASE-7.50.06.2599-10091027",
+                versionCode = 750062599,
+                minSdk = 34,
+            )
+        )
+    )
+
     private const val XRECORDER_CERT_SHA256 =
         "11D5525D76147B28FC6D974ABC56710576CF14A7CE78CF8E75FD8A67E312CEC0"
 }

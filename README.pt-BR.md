@@ -38,7 +38,7 @@ Clique no botão abaixo para adicionar esta fonte direto no **Morphe Manager**, 
 ## 🩹 Patches
 
 <!-- PATCHES_START -->
-> **[v1.8.0](https://github.com/rimixyz/morphe-patches/releases/tag/v1.8.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;33 patches total
+> **[v1.9.0-dev.5](https://github.com/rimixyz/morphe-patches/releases/tag/v1.9.0-dev.5)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;35 patches total
 <details>
 <summary>📦 HabitNow&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
@@ -107,7 +107,7 @@ Clique no botão abaixo para adicionar esta fonte direto no **Morphe Manager**, 
 </details>
 
 <details>
-<summary>📦 XRecorder&nbsp;&nbsp;•&nbsp;&nbsp;4 patches</summary>
+<summary>📦 XRecorder&nbsp;&nbsp;•&nbsp;&nbsp;5 patches</summary>
 <br>
 
 **Package name:** `videoeditor.videorecorder.screenrecorder`
@@ -119,10 +119,11 @@ Clique no botão abaixo para adicionar esta fonte direto no **Morphe Manager**, 
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Disable ads](#disable-ads) | Blocks app-open ad load/show in XRecorder. SDK init is kept because the splash depends on it; ad-free comes from Unlock Pro's IProChecker. Server-side ad decisions are not affected. Known issue: the Edit tab closes in tests while loading the native video engine; core screen recording works with Pro unlocked. |  |
-| [Disable analytics and tracking](#disable-analytics-and-tracking) | Disables Firebase Analytics, Crashlytics and ad ID permissions in XRecorder. Does not change any server-side feature or account state. Known issue: the Edit tab closes in tests while loading the native video engine; core screen recording works with Pro unlocked. |  |
-| [Disable remote config](#disable-remote-config) | Freezes Firebase Remote Config overrides (AdCfg25, ServerDomain) in XRecorder. Server-side features and A/B flags are NOT emulated. Known issue: the Edit tab closes in tests while loading the native video engine; core screen recording works with Pro unlocked. |  |
-| [Unlock Pro](#unlock-pro) | Unlocks the local Pro state of XRecorder (paywall, locks, ad-free). LOCAL ONLY: server-side AI, credits/quotas and subscription token validation are NOT unlocked. Known issue: the Edit tab closes in tests while loading the native video engine; core screen recording works with Pro unlocked. |  |
+| [Disable ads](#disable-ads) | Blocks ads that appear when opening XRecorder. |  |
+| [Disable analytics and tracking](#disable-analytics-and-tracking) | Disables Firebase Analytics, Crashlytics, and advertising ID permissions. |  |
+| [Disable receipt upload](#disable-receipt-upload) | Blocks subscription token uploads. Server-side entitlements stay unchanged. |  |
+| [Disable remote config](#disable-remote-config) | Blocks Firebase Remote Config overrides for ads and the server address. |  |
+| [Unlock Pro](#unlock-pro) | Unlocks local Pro tools and ad-free mode. AI and credits still require server validation. Known issue: the Edit tab closed during testing on a Galaxy A15. |  |
 
 </details>
 
@@ -139,8 +140,8 @@ Clique no botão abaixo para adicionar esta fonte direto no **Morphe Manager**, 
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Disable ads and tracking](#disable-ads-and-tracking) | Blocks AdMob banner/interstitial ads and SDK initialization, disables Firebase Analytics and Crashlytics events, and removes advertising ID permissions. REQUIRES Accessibility: on Android 17, disable Advanced Protection or allow restricted settings (Apps > Auto Clicker > menu > Allow restricted settings), then enable the Auto Clicker service. |  |
-| [Unlock Pro](#unlock-pro) | Grants the local ad-free/premium state without a purchase. REQUIRES Accessibility: on Android 17, disable Advanced Protection or allow restricted settings (Apps > Auto Clicker > menu > Allow restricted settings), then enable the Auto Clicker service. |  |
+| [Disable ads and tracking](#disable-ads-and-tracking) | Blocks ads, analytics, crash reporting, and advertising ID access. Auto Clicker requires Accessibility. |  |
+| [Unlock Pro](#unlock-pro) | Unlocks local Pro features and removes ads. Enable Auto Clicker in Accessibility. On Android 17, use Allow restricted settings in the app info menu first if needed. |  |
 
 </details>
 
@@ -178,6 +179,23 @@ Clique no botão abaixo para adicionar esta fonte direto no **Morphe Manager**, 
 |----------|----------------|-----------|
 | [Disable ads and tracking](#disable-ads-and-tracking) | Blocks all AdMob and Flutter Google Mobile Ads formats, hides the 'Deals' tab and campaign promos, disables Firebase Analytics, Crashlytics, and Facebook SDK auto-tracking, and removes Advertising ID permissions. |  |
 | [Fix Firebase after re-signing](#fix-firebase-after-re-signing) | Restores the original certificate SHA-1 so Firebase Auth (Google login) and push notifications keep working after the APK is re-signed. |  |
+
+</details>
+
+<details>
+<summary>📦 POCO Launcher&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
+
+**Package name:** `com.mi.android.globallauncher`
+
+**🎯 Supported versions:**
+
+| RELEASE-7.50.06.2599-10091027 |
+| :---: |
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Enable non-Xiaomi device compatibility](#enable-non-xiaomi-device-compatibility) | Enables rootless POCO Launcher on non-Xiaomi Android 14+ devices with native widgets, badges, hidden apps, gestures, icon/label customization, double-tap to lock, and battery optimization. |  |
 
 </details>
 
