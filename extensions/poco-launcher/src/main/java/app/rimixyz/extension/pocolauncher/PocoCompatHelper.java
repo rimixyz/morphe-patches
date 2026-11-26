@@ -33,9 +33,12 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ShortcutInfo;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
@@ -43,6 +46,7 @@ import android.hardware.biometrics.BiometricManager;
 import android.hardware.biometrics.BiometricPrompt;
 import android.hardware.display.DisplayManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
@@ -57,12 +61,14 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.Pair;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceControl;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
@@ -414,13 +420,41 @@ public final class PocoCompatHelper {
 
     // ==================== Window / Display / StatusBar ====================
 
+    /**
+     * Configures a crystal-clear transparent status and navigation bar without legacy
+     * {@code FLAG_TRANSLUCENT_STATUS} gradient scrims or Android 10–15 forced contrast bars.
+     */
+    @SuppressWarnings("deprecation")
+    public static void configureTransparentSystemBars(Window window) {
+        if (window == null) {
+            return;
+        }
+        try {
+            window.clearFlags(
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
+                            | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+            );
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            window.setStatusBarColor(Color.TRANSPARENT);
+            window.setNavigationBarColor(Color.TRANSPARENT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.setStatusBarContrastEnforced(false);
+                window.setNavigationBarContrastEnforced(false);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static void setExtraFlag(Window window, int flags, int mask) {
         if (window == null) {
             return;
         }
+        if ((mask & 1) != 0 && (flags & 1) != 0) {
+            configureTransparentSystemBars(window);
+        }
         if ((mask & EXTRA_FLAG_STATUS_BAR_DARK_MODE) != 0) {
+            configureTransparentSystemBars(window);
             try {
-                View decor = window.getDecorView();
                 WindowInsetsController controller = window.getInsetsController();
                 if (controller != null) {
                     boolean darkIcons = (flags & EXTRA_FLAG_STATUS_BAR_DARK_MODE) != 0;
@@ -1948,18 +1982,259 @@ public final class PocoCompatHelper {
     // ==================== Native Non-Xiaomi UX: Uninstall, Widgets, Wallpaper ====================
 
     public static boolean launchUninstallIntent(Context context, String packageName) {
-        if (context == null || packageName == null || packageName.isEmpty()) {
+        return launchUninstallIntent(context, packageName, -1);
+    }
+
+    public static boolean launchUninstallIntent(Context context, final String packageName, final int userId) {
+        if (packageName == null || packageName.isEmpty()) {
+            return false;
+        }
+        Context resolved = context;
+        if (!(resolved instanceof Activity)) {
+            Object active = getActiveLauncher();
+            if (active instanceof Activity && !((Activity) active).isFinishing()) {
+                resolved = (Activity) active;
+            }
+        }
+        if (resolved == null) {
+            resolved = getAppContext();
+        }
+        if (resolved == null) {
+            return false;
+        }
+        final Context launchCtx = resolved;
+        runOnMainThread(new Runnable() {
+            @Override
+            public void run() {
+                Uri pkgUri = Uri.parse("package:" + packageName);
+                UserHandle targetUser = resolveUserHandleById(launchCtx, userId);
+                Intent primary = new Intent(Intent.ACTION_DELETE, pkgUri);
+                if (targetUser != null) {
+                    primary.putExtra(Intent.EXTRA_USER, targetUser);
+                }
+                if (!(launchCtx instanceof Activity)) {
+                    primary.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
+                try {
+                    launchCtx.startActivity(primary);
+                    return;
+                } catch (Throwable t) {
+                    Log.w(TAG, "ACTION_DELETE failed for " + packageName + ", trying ACTION_UNINSTALL_PACKAGE", t);
+                }
+                try {
+                    @SuppressWarnings("deprecation")
+                    Intent fallback = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, pkgUri);
+                    if (targetUser != null) {
+                        fallback.putExtra(Intent.EXTRA_USER, targetUser);
+                    }
+                    if (!(launchCtx instanceof Activity)) {
+                        fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    }
+                    launchCtx.startActivity(fallback);
+                } catch (Throwable t2) {
+                    Log.e(TAG, "Failed to launch uninstall intent for " + packageName, t2);
+                }
+            }
+        });
+        return true;
+    }
+
+    private static UserHandle resolveUserHandleById(Context ctx, int userId) {
+        if (ctx == null || userId <= 0) {
+            return null;
+        }
+        try {
+            UserManager um = (UserManager) ctx.getSystemService(Context.USER_SERVICE);
+            if (um == null) {
+                return null;
+            }
+            List<UserHandle> profiles = um.getUserProfiles();
+            if (profiles == null) {
+                return null;
+            }
+            Method getId = reflectLookupMethod(UserHandle.class, "getIdentifier", null, false);
+            for (UserHandle uh : profiles) {
+                if (uh == null) {
+                    continue;
+                }
+                int id = -1;
+                if (getId != null) {
+                    try {
+                        Object res = getId.invoke(uh);
+                        if (res instanceof Integer) {
+                            id = (Integer) res;
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (id < 0) {
+                    id = uh.hashCode();
+                }
+                if (id == userId) {
+                    return uh;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * Intercepts single-app uninstalls from long-press shortcut menu (trash icon) or edit-mode
+     * Uninstall button so Android's native system confirmation dialog opens immediately without a
+     * redundant POCO dialog, premature Boom explosion, or optimistic removal from the App Drawer.
+     *
+     * @return {@code true} if handled directly via Android {@code ACTION_DELETE}; {@code false} to
+     *         continue with POCO's dialog (e.g. non-app shortcuts, hide-only apps, or multi-select).
+     */
+    public static boolean tryDirectSystemUninstall(Object launcher, List<?> shortcutList) {
+        if (launcher == null || shortcutList == null || shortcutList.size() != 1) {
             return false;
         }
         try {
-            Intent intent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + packageName));
-            if (!(context instanceof Activity)) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            Object item = shortcutList.get(0);
+            if (item == null) {
+                return false;
             }
-            context.startActivity(intent);
-            return true;
+            Object isAppObj = invokeZeroArg(item, "isApplication");
+            if (!Boolean.TRUE.equals(isAppObj)) {
+                return false;
+            }
+            Class<?> ctrlCls = reflectGetClass("com.miui.home.launcher.uninstall.UninstallController");
+            Class<?> itemInfoCls = reflectGetClass("com.miui.home.model.api.ItemInfo");
+            Class<?> baseLauncherCls = reflectGetClass("com.miui.home.launcher.BaseLauncher");
+            if (ctrlCls != null && itemInfoCls != null && baseLauncherCls != null) {
+                Method isValid = findMethodInHierarchy(
+                        ctrlCls, "isUninstallValid", itemInfoCls, baseLauncherCls, boolean.class);
+                if (isValid != null) {
+                    Object valid = isValid.invoke(null, item, launcher, Boolean.FALSE);
+                    if (!Boolean.TRUE.equals(valid)) {
+                        return false;
+                    }
+                }
+            }
+            Object pkgObj = invokeZeroArg(item, "getPackageName");
+            if (!(pkgObj instanceof String) || ((String) pkgObj).isEmpty()) {
+                return false;
+            }
+            int userId = -1;
+            Object uidObj = invokeZeroArg(item, "getUserId");
+            if (uidObj instanceof Integer) {
+                userId = (Integer) uidObj;
+            }
+            Context ctx = launcher instanceof Context ? (Context) launcher : getAppContext();
+            return launchUninstallIntent(ctx, (String) pkgObj, userId);
         } catch (Throwable t) {
-            Log.e(TAG, "Failed to launch ACTION_DELETE for " + packageName, t);
+            Log.w(TAG, "tryDirectSystemUninstall failed: " + t.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Replacement for {@code UninstallController$5.accept(List)}: invokes {@code uninstallApps}
+     * without prematurely marking {@code PendingUninstallTracker} or hiding icons via Boom anim.
+     */
+    public static void handleUninstallDialogConfirm(Object launcher, List<?> shortcutList) {
+        if (launcher == null || shortcutList == null || shortcutList.isEmpty()) {
+            return;
+        }
+        try {
+            Object ctrl = invokeZeroArg(launcher, "getUninstallController");
+            if (ctrl == null) {
+                return;
+            }
+            Method uninstallApps = findMethodInHierarchy(ctrl.getClass(), "uninstallApps", List.class);
+            if (uninstallApps != null) {
+                uninstallApps.invoke(ctrl, shortcutList);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "handleUninstallDialogConfirm failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Replacement for {@code UninstallDialog.removeItem(View)} (drag-to-Uninstall drop target):
+     * launches Android's system uninstall dialog for regular apps and restores the single dragged
+     * workspace icon immediately so canceling Android's dialog never loses the icon (while
+     * confirming uninstall removes it cleanly via {@code ACTION_PACKAGE_REMOVED}).
+     */
+    public static boolean handleUninstallDialogRemoveItem(Object uninstallDialog, View view) {
+        if (uninstallDialog == null || view == null) {
+            return false;
+        }
+        try {
+            final Object itemInfo = view.getTag();
+            if (itemInfo == null) {
+                return false;
+            }
+            Object launcher = readField(uninstallDialog, "mLauncher");
+            if (launcher == null) {
+                return false;
+            }
+            Object ctrl = invokeZeroArg(launcher, "getUninstallController");
+            if (ctrl == null) {
+                return false;
+            }
+            boolean isApp = Boolean.TRUE.equals(invokeZeroArg(itemInfo, "isApplication"));
+            if (isApp) {
+                Class<?> shortcutCls = reflectGetClass("com.miui.home.launcher.ShortcutInfo");
+                Method uninstallApp = shortcutCls != null
+                        ? findMethodInHierarchy(ctrl.getClass(), "uninstallApp", shortcutCls)
+                        : null;
+                boolean launched = false;
+                if (uninstallApp != null && shortcutCls.isInstance(itemInfo)) {
+                    Object res = uninstallApp.invoke(ctrl, itemInfo);
+                    launched = Boolean.TRUE.equals(res);
+                }
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    // Single-item UninstallDialog.onConfirm() runs on main thread: returning false
+                    // triggers addItemsWhenCancelUninstallWithoutAnim() (zero toast), keeping the
+                    // icon safe if the user cancels Android's system uninstall dialog.
+                    return false;
+                }
+                if (launched && uninstallDialog instanceof View) {
+                    ((View) uninstallDialog).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                invokeZeroArg(itemInfo, "finishPending");
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    });
+                }
+                return launched;
+            } else {
+                Class<?> utilCls = reflectGetClass("com.miui.home.launcher.common.Utilities");
+                Class<?> itemInfoCls = reflectGetClass("com.miui.home.model.api.ItemInfo");
+                boolean isHybrid = false;
+                if (utilCls != null && itemInfoCls != null) {
+                    Method m = findMethodInHierarchy(utilCls, "isHybirdApp", itemInfoCls);
+                    if (m != null) {
+                        isHybrid = Boolean.TRUE.equals(m.invoke(null, itemInfo));
+                    }
+                }
+                if (isHybrid && itemInfoCls != null) {
+                    Method del = findMethodInHierarchy(ctrl.getClass(), "deleteItem", itemInfoCls);
+                    if (del != null) {
+                        del.invoke(ctrl, itemInfo);
+                    }
+                }
+                if (uninstallDialog instanceof View) {
+                    ((View) uninstallDialog).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                invokeZeroArg(itemInfo, "finishPending");
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    });
+                }
+                return true;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "handleUninstallDialogRemoveItem failed: " + t.getMessage());
             return false;
         }
     }
@@ -2860,17 +3135,135 @@ public final class PocoCompatHelper {
         }
     }
 
+    /**
+     * Accurately detects whether the host device is using Gesture navigation across AOSP,
+     * Samsung One UI (both sides+bottom and 3-swipe-bar gestures), Pixel, Motorola, OnePlus/OPPO,
+     * and Vivo/Honor Android 14+ devices.
+     */
+    public static boolean isSystemGestureNavigationEnabled(Context context) {
+        Context ctx = context != null ? context : getAppContext();
+        boolean sawExplicitNonGesture = false;
+
+        if (ctx != null) {
+            ContentResolver cr = ctx.getContentResolver();
+            if (cr != null) {
+                // 1. Samsung One UI authoritative toggle (true for both AOSP & 3-bar swipe gestures).
+                try {
+                    int samsungGesture = Settings.Global.getInt(cr, "navigation_bar_gesture_while_hidden", -1);
+                    if (samsungGesture == 1) {
+                        return true;
+                    }
+                    if (samsungGesture == 0) {
+                        sawExplicitNonGesture = true;
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                // 2. Standard Android navigation_mode (0=3-button, 1=2-button, 2=gestural, 3=Samsung 3-bar).
+                try {
+                    int navMode = Settings.Secure.getInt(cr, "navigation_mode", -1);
+                    if (navMode >= 2) {
+                        return true;
+                    }
+                    if (navMode == 0 || navMode == 1) {
+                        sawExplicitNonGesture = true;
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                // 3. Other OEM gesture toggles (ColorOS / OnePlus / Realme / Vivo / Honor).
+                try {
+                    if (Settings.Secure.getInt(cr, "hide_navigationbar_enable", -1) >= 2) {
+                        return true;
+                    }
+                } catch (Throwable ignored) {
+                }
+                try {
+                    if (Settings.Secure.getInt(cr, "navigation_gesture_on", -1) == 1) {
+                        return true;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+
+            // 4. Android RRO framework integer (tracks live navbar overlay switches immediately).
+            try {
+                Resources res = ctx.getResources();
+                int resId = res != null ? res.getIdentifier("config_navBarInteractionMode", "integer", "android") : 0;
+                if (resId != 0) {
+                    int interactionMode = res.getInteger(resId);
+                    if (interactionMode >= 2) {
+                        return true;
+                    }
+                    if (interactionMode == 0 || interactionMode == 1) {
+                        sawExplicitNonGesture = true;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        try {
+            Resources sysRes = Resources.getSystem();
+            int resId = sysRes != null ? sysRes.getIdentifier("config_navBarInteractionMode", "integer", "android") : 0;
+            if (resId != 0) {
+                int interactionMode = sysRes.getInteger(resId);
+                if (interactionMode >= 2) {
+                    return true;
+                }
+                if (interactionMode == 0 || interactionMode == 1) {
+                    sawExplicitNonGesture = true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        if (sawExplicitNonGesture) {
+            return false;
+        }
+
+        // 5. Runtime WindowInsets fallback when OS settings & RRO resources are unavailable.
+        try {
+            Activity act = ctx instanceof Activity ? (Activity) ctx : null;
+            if (act == null) {
+                Object active = getActiveLauncher();
+                if (active instanceof Activity) {
+                    act = (Activity) active;
+                }
+            }
+            if (act != null && act.getWindow() != null) {
+                View decor = act.getWindow().getDecorView();
+                WindowInsets insets = decor != null ? decor.getRootWindowInsets() : null;
+                if (insets != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Insets sysGestures = insets.getInsets(WindowInsets.Type.systemGestures());
+                    if (sysGestures.left > 0 && sysGestures.right > 0) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     public static String getSystemNavigationModeLabel(Context context) {
         Context ctx = context != null ? context : getAppContext();
-        int mode = 0;
+        boolean gestures = isSystemGestureNavigationEnabled(ctx);
         if (ctx != null) {
             try {
-                mode = Settings.Secure.getInt(ctx.getContentResolver(), "navigation_mode", 0);
+                String resName = gestures ? "navigation_type_full_screen" : "navigation_type_virtual_key";
+                int resId = ctx.getResources().getIdentifier(resName, "string", ctx.getPackageName());
+                if (resId != 0) {
+                    String localized = ctx.getString(resId);
+                    if (localized != null && !localized.isEmpty()) {
+                        return localized;
+                    }
+                }
             } catch (Throwable ignored) {
             }
         }
         boolean pt = isPortugueseLocale();
-        if (mode == 2) {
+        if (gestures) {
             return pt ? "Gestos" : "Gestures";
         }
         return pt ? "Botões" : "Buttons";
@@ -5394,6 +5787,378 @@ public final class PocoCompatHelper {
     private static void markUsed(Set<String> usedPackages, LauncherActivityInfo info) {
         if (info != null && info.getComponentName() != null) {
             usedPackages.add(info.getComponentName().getPackageName());
+        }
+    }
+
+    // ==================== Expanded Home Screen Grid Options ====================
+
+    private static final int CUSTOM_LAYOUT_TYPE_BASE = 100;
+
+    /**
+     * Decodes column count from extended custom {@code LauncherLayoutType} codes
+     * ({@code type = cols * 100 + rows}, e.g. {@code 506 -> 5}, {@code 608 -> 6}).
+     * Returns {@code -1} for stock types ({@code 0, 1, 2, -1}) so stock mapping runs unchanged.
+     */
+    public static int getCellXFromLayoutType(int layoutType) {
+        if (layoutType >= CUSTOM_LAYOUT_TYPE_BASE) {
+            int cols = layoutType / CUSTOM_LAYOUT_TYPE_BASE;
+            if (cols >= 3 && cols <= 8) {
+                return cols;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Returns a readable label (e.g. {@code "5x6"}) for extended custom layout types, or
+     * {@code null} for stock types.
+     */
+    public static String getCustomLayoutTypeName(int layoutType) {
+        if (layoutType >= CUSTOM_LAYOUT_TYPE_BASE) {
+            int cols = layoutType / CUSTOM_LAYOUT_TYPE_BASE;
+            int rows = layoutType % CUSTOM_LAYOUT_TYPE_BASE;
+            if (cols >= 3 && cols <= 8 && rows >= 4 && rows <= 12) {
+                return cols + "x" + rows;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Computes row count {@code Y} for both stock ({@code 0, 1, 2}) and extended custom
+     * ({@code cols * 100 + rows}) layout types, safely clamped to {@code [4, maxY]} for the
+     * device's current usable grid height.
+     */
+    public static int computeGridCellCountY(int gridHeight, int cellWidth, int layoutType, int fallbackY) {
+        if (cellWidth <= 0) {
+            return fallbackY;
+        }
+        int maxY = Math.max(4, gridHeight / cellWidth);
+        if (layoutType >= CUSTOM_LAYOUT_TYPE_BASE) {
+            int desiredY = layoutType % CUSTOM_LAYOUT_TYPE_BASE;
+            return Math.max(4, Math.min(desiredY, maxY));
+        }
+        return Math.max(4, maxY - (layoutType == 0 ? 1 : 0));
+    }
+
+    /**
+     * Custom vertical height distribution for extended grid layouts ({@code layoutType >= 100})
+     * inside {@code GridSizeCalRules.calVariableHeight(int, int)}. Expands workspace row height
+     * proportionally (up to {@code 1.60x cellWidth}) while keeping dock height sleek
+     * ({@code <= 1.086x cellWidth}), so grids like {@code 4x5}, {@code 5x6}, {@code 5x7},
+     * {@code 6x7}, and {@code 6x8} fill the full Home screen evenly without large empty borders.
+     *
+     * @return {@code -1} to fall through to untouched stock logic; {@code 0} or {@code 1} for
+     *         the boolean return value of {@code calVariableHeight}.
+     */
+    public static int applyCustomGridVariableHeight(Object rules, int remainingSpace, int layoutType) {
+        if (rules == null || layoutType < CUSTOM_LAYOUT_TYPE_BASE) {
+            return -1;
+        }
+        try {
+            int cellW = readIntField(rules, "mCellWidth", 0);
+            int cellY = readIntField(rules, "mCellCountY", 0);
+            if (cellW <= 0 || cellY <= 0) {
+                return -1;
+            }
+            int positiveRemain = Math.max(0, remainingSpace);
+            int hotseatCellH = Math.min(
+                    Math.round(cellW * 1.086f),
+                    cellW + (positiveRemain / (cellY + 1))
+            );
+            int hotseatExtra = Math.max(0, hotseatCellH - cellW);
+            int rowBudget = Math.max(0, positiveRemain - hotseatExtra);
+            int maxCellH = Math.round(cellW * 1.60f);
+            int newCellH = Math.min(maxCellH, cellW + (rowBudget / cellY));
+            int paddingRemain = Math.max(0, rowBudget - ((newCellH - cellW) * cellY));
+
+            int varTop = paddingRemain / 2;
+            int varInd = paddingRemain - varTop;
+
+            writeIntField(rules, "mCellHeight", newCellH);
+            writeIntField(rules, "mHotseatCellHeight", hotseatCellH);
+            writeIntField(rules, "mVariableWorkspaceCellPaddingTop", varTop);
+            writeIntField(rules, "mVariableIndicatorHeight", varInd);
+            writeIntField(rules, "mVariableHotSeatMarginBottom", 0);
+
+            int stableTop = readIntField(rules, "mStableWorkspaceCellPaddingTop", 0);
+            int screenMarginTop = readChangeableIntValue(readField(rules, "mScreenMarginTop"), 0);
+            int stableInd = readChangeableIntValue(readField(rules, "mStableIndicatorHeight"), 0);
+            int searchBarMarginBottom = readChangeableIntValue(readField(rules, "mSearchBarMarginBottom"), 0);
+
+            int hotseatMargin = searchBarMarginBottom;
+            Method calHotseat = findMethodInHierarchy(rules.getClass(), "calHotseatMarginBottom", int.class);
+            if (calHotseat != null) {
+                Object res = calHotseat.invoke(rules, searchBarMarginBottom);
+                if (res instanceof Integer) {
+                    hotseatMargin = (Integer) res;
+                }
+            }
+
+            boolean c1 = setChangeableIntValue(readField(rules, "mHotseatMarginBottom"), hotseatMargin);
+            boolean c2 = setChangeableIntValue(
+                    readField(rules, "mWorkspaceTopPadding"), stableTop + varTop + screenMarginTop);
+            boolean c3 = setChangeableIntValue(
+                    readField(rules, "mIndicatorHeight"), stableInd + varInd);
+            return (c1 || c2 || c3) ? 1 : 0;
+        } catch (Throwable t) {
+            Log.w(TAG, "applyCustomGridVariableHeight fallback to stock: " + t.getMessage());
+            return -1;
+        }
+    }
+
+    private static int readIntField(Object target, String fieldName, int def) {
+        Object v = readField(target, fieldName);
+        return v instanceof Integer ? (Integer) v : def;
+    }
+
+    private static void writeIntField(Object target, String fieldName, int value) {
+        if (target == null) {
+            return;
+        }
+        Field f = reflectGetField(target.getClass(), fieldName, null);
+        if (f != null) {
+            try {
+                f.setInt(target, value);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private static int readChangeableIntValue(Object changeable, int def) {
+        if (changeable == null) {
+            return def;
+        }
+        try {
+            Object v = invokeZeroArg(changeable, "getValue");
+            return v instanceof Integer ? (Integer) v : def;
+        } catch (Throwable ignored) {
+            return def;
+        }
+    }
+
+    private static boolean setChangeableIntValue(Object changeable, int value) {
+        if (changeable == null) {
+            return false;
+        }
+        try {
+            Method setValue = findMethodInHierarchy(changeable.getClass(), "setValue", Object.class);
+            if (setValue != null) {
+                Object res = setValue.invoke(changeable, Integer.valueOf(value));
+                return Boolean.TRUE.equals(res);
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * Provides proportional icon-scale bounds for 6-column Home grids (which stock
+     * {@code GridConfigUtil.ICON_SIZE_SCALE} omits, causing a 1.0x fallback).
+     */
+    public static Pair<Float, Float> getGridIconScaleScope(int cellCountX) {
+        if (cellCountX == 6) {
+            return new Pair<>(0.68f, 0.54f);
+        }
+        return null;
+    }
+
+    /**
+     * Provides a balanced default icon scale for 6-column Home grids, or {@code -1f} for stock.
+     */
+    public static float getGridDefaultIconScale(int cellCountX) {
+        if (cellCountX == 6) {
+            return 0.64f;
+        }
+        return -1.0f;
+    }
+
+    /**
+     * Populates {@code LayoutPreviewView.mButtonList} with an expanded, screen-adapted set of
+     * Home screen grid layouts spanning 4, 5, and 6 columns (up to 10 deduplicated options,
+     * preserving stock types {@code 0}, {@code 1}, and {@code 2} for full compatibility).
+     */
+    @SuppressWarnings("unchecked")
+    public static void populateLayoutPreviewButtons(Object layoutPreviewView) {
+        if (layoutPreviewView == null) {
+            return;
+        }
+        try {
+            Object listObj = readField(layoutPreviewView, "mButtonList");
+            Object inUse = readField(layoutPreviewView, "mCellCountXYInUse");
+            if (!(listObj instanceof List) || inUse == null) {
+                return;
+            }
+            List<Object> buttonList = (List<Object>) listObj;
+            buttonList.clear();
+
+            Method createCell = findMethodInHierarchy(
+                    layoutPreviewView.getClass(), "createCellCountXY", int.class, int.class, int.class);
+            if (createCell == null) {
+                return;
+            }
+
+            boolean supportLoose4 = true;
+            Class<?> layoutTypeCls = reflectGetClass("com.miui.home.common.LauncherLayoutType");
+            if (layoutTypeCls != null) {
+                Method getInst = findMethodInHierarchy(layoutTypeCls, "getInstance");
+                Object inst = getInst != null ? getInst.invoke(null) : null;
+                if (inst != null) {
+                    Object res = invokeZeroArg(inst, "isSupportMaxRowsMinusOneLayout");
+                    if (res instanceof Boolean) {
+                        supportLoose4 = (Boolean) res;
+                    }
+                }
+            }
+
+            // Probe native max rows for 4, 5, and 6 columns on the current display & search bar config.
+            Object stock4Loose = supportLoose4 ? createCell.invoke(layoutPreviewView, 0, 4, 0) : null;
+            Object stock4Std = createCell.invoke(layoutPreviewView, 0, 4, 1);
+            Object stock5Dense = createCell.invoke(layoutPreviewView, 0, 5, 2);
+            Object probe6 = createCell.invoke(layoutPreviewView, 0, 6, 699);
+
+            int maxY4 = readIntField(stock4Std, "y", 6);
+            int maxY5 = readIntField(stock5Dense, "y", 7);
+            int maxY6 = readIntField(probe6, "y", 8);
+
+            // Preserve stock types (0, 1, 2) whenever an (x, y) matches one of them.
+            LinkedHashMap<String, Object> unique = new LinkedHashMap<>();
+
+            // 4-column options (e.g. 4x5, 4x6, 4x7 on 20:9; 4x5, 4x6 on 18:9)
+            if (maxY4 >= 5) {
+                int looseY = stock4Loose != null ? readIntField(stock4Loose, "y", -1) : -1;
+                if (5 < maxY4 && 5 != looseY) {
+                    addGridCandidate(unique, createCell.invoke(layoutPreviewView, 0, 4, 405));
+                }
+            }
+            if (stock4Loose != null) {
+                addGridCandidate(unique, stock4Loose);
+            }
+            addGridCandidate(unique, stock4Std);
+
+            // 5-column options (e.g. 5x6, 5x7, 5x8, 5x9 on 20:9; 5x5, 5x6, 5x7 on 18:9)
+            if (maxY5 <= 6 && 5 < maxY5) {
+                addGridCandidate(unique, createCell.invoke(layoutPreviewView, 0, 5, 505));
+            }
+            for (int r = 6; r <= 8; r++) {
+                if (r < maxY5) {
+                    addGridCandidate(unique, createCell.invoke(layoutPreviewView, 0, 5, 500 + r));
+                }
+            }
+            addGridCandidate(unique, stock5Dense);
+
+            // 6-column options (e.g. 6x7, 6x8, 6x9 on 20:9; 6x6, 6x7, 6x8 on 18:9)
+            int start6 = maxY6 <= 8 ? 6 : 7;
+            int end6 = Math.min(maxY6, 9);
+            for (int r = start6; r <= end6; r++) {
+                if (unique.size() >= 10) {
+                    break;
+                }
+                addGridCandidate(unique, createCell.invoke(layoutPreviewView, 0, 6, 600 + r));
+            }
+
+            int idx = 0;
+            for (Object item : unique.values()) {
+                writeIntField(item, "index", idx++);
+                buttonList.add(item);
+            }
+
+            // Match mCellCountXYInUse.index (exact x/y/type first, then x/y fallback).
+            int useX = readIntField(inUse, "x", -1);
+            int useY = readIntField(inUse, "y", -1);
+            int useType = readIntField(inUse, "type", -1);
+            int matchedIdx = -1;
+            for (Object item : buttonList) {
+                if (readIntField(item, "x", -2) == useX
+                        && readIntField(item, "y", -2) == useY
+                        && readIntField(item, "type", -2) == useType) {
+                    matchedIdx = readIntField(item, "index", -1);
+                    break;
+                }
+            }
+            if (matchedIdx < 0) {
+                for (Object item : buttonList) {
+                    if (readIntField(item, "x", -2) == useX
+                            && readIntField(item, "y", -2) == useY) {
+                        matchedIdx = readIntField(item, "index", -1);
+                        writeIntField(inUse, "type", readIntField(item, "type", useType));
+                        break;
+                    }
+                }
+            }
+            if (matchedIdx >= 0) {
+                writeIntField(inUse, "index", matchedIdx);
+            }
+
+            // Restore active GridConfig metrics after probing candidates (matches stock line 256).
+            Context ctx = layoutPreviewView instanceof View
+                    ? ((View) layoutPreviewView).getContext()
+                    : getAppContext();
+            Class<?> devCfgCls = reflectGetClass("com.miui.home.common.device.DeviceConfigs");
+            Field activeField = devCfgCls != null ? reflectGetField(devCfgCls, "mActiveGridConfig", null) : null;
+            Object activeGrid = activeField != null ? activeField.get(null) : null;
+            if (activeGrid != null && ctx != null) {
+                Method calGridSize = findMethodInHierarchy(
+                        activeGrid.getClass(), "calGridSize", Context.class, int.class, Object.class);
+                if (calGridSize != null) {
+                    calGridSize.invoke(activeGrid, ctx, 11, inUse);
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "populateLayoutPreviewButtons failed: " + t.getMessage(), t);
+        }
+    }
+
+    private static void addGridCandidate(LinkedHashMap<String, Object> map, Object cellCountXY) {
+        if (cellCountXY == null) {
+            return;
+        }
+        int x = readIntField(cellCountXY, "x", -1);
+        int y = readIntField(cellCountXY, "y", -1);
+        if (x <= 0 || y <= 0) {
+            return;
+        }
+        String key = x + "x" + y;
+        if (!map.containsKey(key)) {
+            map.put(key, cellCountXY);
+        }
+    }
+
+    /**
+     * Scrolls the horizontal {@code LayoutPreviewView} carousel so the currently active grid pill
+     * is immediately visible when opening Home screen layout preview.
+     */
+    public static void scrollLayoutPreviewToActive(final Object layoutPreviewView) {
+        if (!(layoutPreviewView instanceof View)) {
+            return;
+        }
+        try {
+            Object inUse = readField(layoutPreviewView, "mCellCountXYInUse");
+            final int activeIdx = inUse != null ? readIntField(inUse, "index", 0) : 0;
+            if (activeIdx < 0) {
+                return;
+            }
+            ((View) layoutPreviewView).post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        int count = layoutPreviewView instanceof ViewGroup
+                                ? ((ViewGroup) layoutPreviewView).getChildCount()
+                                : 0;
+                        if (count <= 0) {
+                            return;
+                        }
+                        int target = Math.max(0, Math.min(activeIdx, count - 1));
+                        Method scroll = findMethodInHierarchy(
+                                layoutPreviewView.getClass(), "scrollToScreen", int.class);
+                        if (scroll != null) {
+                            scroll.invoke(layoutPreviewView, target);
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            });
+        } catch (Throwable ignored) {
         }
     }
 }

@@ -25,9 +25,11 @@ import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc
 import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.Instruction
+import com.android.tools.smali.dexlib2.iface.instruction.NarrowLiteralInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
@@ -212,11 +214,19 @@ private fun patchManifest() {
 
         // Declare USE_BIOMETRIC so modern Android BiometricPrompt works seamlessly for Hide Apps
         // on non-Xiaomi Android 14+ devices (original APK only declared deprecated USE_FINGERPRINT).
-        val hasUseBiometric = manifest.elements("uses-permission")
-            .any { it.attribute("android:name") == "android.permission.USE_BIOMETRIC" }
-        if (!hasUseBiometric) {
-            manifest.root.appendChild("uses-permission") {
-                setAttribute("android:name", "android.permission.USE_BIOMETRIC")
+        // Also declare REQUEST_DELETE_PACKAGES so Android 9+ PackageInstaller shows the native
+        // uninstall confirmation dialog for ACTION_DELETE (original APK only declared privileged
+        // DELETE_PACKAGES, causing Android 14/15 to silently abort uninstall requests).
+        for (permName in listOf(
+            "android.permission.USE_BIOMETRIC",
+            "android.permission.REQUEST_DELETE_PACKAGES",
+        )) {
+            val hasPerm = manifest.elements("uses-permission")
+                .any { it.attribute("android:name") == permName }
+            if (!hasPerm) {
+                manifest.root.appendChild("uses-permission") {
+                    setAttribute("android:name", permName)
+                }
             }
         }
 
@@ -2584,7 +2594,8 @@ private fun patchNativeNonXiaomiUx() {
     //     and BaseLauncher.onActivityResult.
     patchAppWidgetBinding()
 
-    // 7c. Standard Android ACTION_DELETE app uninstall (all LauncherUtils.deletePackage* paths route here).
+    // 7c. Standard Android ACTION_DELETE app uninstall (all LauncherUtils.deletePackage* paths
+    //     plus long-press trash, multi-select DeleteDialog, and drag-to-UninstallDialog).
     LauncherUtilsDeletePackageFingerprint.method.replaceBody(
         locals = 0,
         smali = """
@@ -2595,10 +2606,11 @@ private fun patchNativeNonXiaomiUx() {
     LauncherUtilsDeletePackageAsUserFingerprint.method.replaceBody(
         locals = 0,
         smali = """
-            invoke-static { p0, p1 }, $COMPAT_HELPER->launchUninstallIntent(Landroid/content/Context;Ljava/lang/String;)Z
+            invoke-static { p0, p1, p3 }, $COMPAT_HELPER->launchUninstallIntent(Landroid/content/Context;Ljava/lang/String;I)Z
             return-void
         """.trimIndent(),
     )
+    patchUninstallFlow()
 
     // 7d. Wallpaper color adaptation & real Android wallpaper picker fallback.
     patchWallpaperIntegration()
@@ -2616,6 +2628,398 @@ private fun patchNativeNonXiaomiUx() {
     // 7h. Non-Xiaomi settings polish (Notification badges, Icons, Hide Apps, Default Home,
     //     Swipe-down gestures, No-label mode, Animation speed, Double-Tap to Lock, Global Search).
     patchNonXiaomiSettingsAndFallbacks()
+
+    // 7i. Transparent status & navigation bars without legacy FLAG_TRANSLUCENT_STATUS dark scrim.
+    patchTransparentSystemBars()
+
+    // 7j. Expanded Home screen grid options (4/5/6 columns, up to 10 screen-adapted layouts).
+    patchExpandedHomeScreenGrids()
+}
+
+private fun patchUninstallFlow() {
+    val uninstallCtrl = mutableClassDefBy("Lcom/miui/home/launcher/uninstall/UninstallController;")
+
+    // 1. Single-app uninstall via long-press trash icon or edit-mode button: open Android's native
+    //    ACTION_DELETE dialog directly so the app is never deleted prematurely from the App Drawer.
+    val showDialog = uninstallCtrl.findMethodOrThrow(
+        "showDialog",
+        listOf(
+            "Lcom/miui/home/launcher/BaseLauncher;",
+            "Ljava/util/List;",
+            "Ljava/lang/String;",
+        ),
+        "V",
+    )
+    val firstShowInsn = showDialog.instructions.first()
+    showDialog.addInstructionsWithLabels(
+        0,
+        """
+            invoke-static { p0, p1 }, $COMPAT_HELPER->tryDirectSystemUninstall(Ljava/lang/Object;Ljava/util/List;)Z
+            move-result v0
+            if-eqz v0, :continue_uninstall_dialog
+            return-void
+        """.trimIndent(),
+        ExternalLabel("continue_uninstall_dialog", firstShowInsn),
+    )
+
+    // 2. Prevent DeleteObserver from enqueuing PackageRemoveTask before Android confirms uninstall
+    //    (which previously erased apps from the App Drawer without actually uninstalling them).
+    val deleteObserver = mutableClassDefBy("Lcom/miui/home/launcher/uninstall/UninstallController\$DeleteObserver;")
+    deleteObserver.findMethodOrThrow(
+        "onPackageStartDelete",
+        listOf("Lcom/miui/home/launcher/ShortcutInfo;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+
+    // 3. Prevent poisoning PendingUninstallTracker (ACTION_DELETE never fires DeleteObserver callbacks).
+    uninstallCtrl.findMethodOrThrow(
+        "markPendingUninstall",
+        listOf("Ljava/util/List;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+
+    // 4. Multi-select DeleteDialog confirm: invoke uninstallApps directly without premature Boom hide.
+    val uninstallConfirm = mutableClassDefBy("Lcom/miui/home/launcher/uninstall/UninstallController\$5;")
+    uninstallConfirm.findMethodOrThrow(
+        "accept",
+        listOf("Ljava/util/List;"),
+        "V",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            iget-object v0, p0, Lcom/miui/home/launcher/uninstall/UninstallController${'$'}5;->val${'$'}launcher:Lcom/miui/home/launcher/BaseLauncher;
+            invoke-static { v0, p1 }, $COMPAT_HELPER->handleUninstallDialogConfirm(Ljava/lang/Object;Ljava/util/List;)V
+            return-void
+        """.trimIndent(),
+    )
+
+    // 5. Drag-to-Uninstall drop target: open ACTION_DELETE while keeping the dragged icon safe if
+    //    the user cancels Android's system dialog (confirmed uninstall removes it via PACKAGE_REMOVED).
+    val uninstallDialog = mutableClassDefBy("Lcom/miui/home/launcher/UninstallDialog;")
+    uninstallDialog.findMethodOrThrow(
+        "removeItem",
+        listOf("Landroid/view/View;"),
+        "Z",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1 }, $COMPAT_HELPER->handleUninstallDialogRemoveItem(Ljava/lang/Object;Landroid/view/View;)Z
+            move-result v0
+            return v0
+        """.trimIndent(),
+    )
+}
+
+private fun patchTransparentSystemBars() {
+    // 1. BaseLauncher.onCreateBeforeSetCreatedFlag: replace window.addFlags(FLAG_TRANSLUCENT_STATUS)
+    //    (0x04000000), which causes non-Xiaomi Android 10–15 SystemUI to draw a dark status bar scrim,
+    //    with clean transparent system bar configuration and disabled contrast enforcement.
+    val baseLauncher = mutableClassDefBy("Lcom/miui/home/launcher/BaseLauncher;")
+    val onCreateBefore = baseLauncher.findMethodOrThrow("onCreateBeforeSetCreatedFlag", emptyList(), "Z")
+    val insns = onCreateBefore.instructions.toList()
+    val translucentConstIdx = insns.indexOfFirst { ins ->
+        ins is NarrowLiteralInstruction &&
+            ins is OneRegisterInstruction &&
+            ins.narrowLiteral == 0x04000000
+    }
+    check(translucentConstIdx >= 0) {
+        "POCO Launcher: constante FLAG_TRANSLUCENT_STATUS (0x04000000) não encontrada em BaseLauncher.onCreateBeforeSetCreatedFlag"
+    }
+    val flagReg = (insns[translucentConstIdx] as OneRegisterInstruction).registerA
+    val addFlagsIdx = (translucentConstIdx + 1 until minOf(translucentConstIdx + 4, insns.size)).firstOrNull { idx ->
+        val ins = insns[idx]
+        ins.opcode == Opcode.INVOKE_VIRTUAL &&
+            ins is FiveRegisterInstruction &&
+            ins.registerD == flagReg &&
+            ((ins as? ReferenceInstruction)?.reference as? MethodReference)?.let {
+                it.definingClass == "Landroid/view/Window;" && it.name == "addFlags"
+            } == true
+    } ?: throw PatchException(
+        "POCO Launcher: Window.addFlags(FLAG_TRANSLUCENT_STATUS) não encontrado em BaseLauncher.onCreateBeforeSetCreatedFlag",
+    )
+    val windowReg = (insns[addFlagsIdx] as FiveRegisterInstruction).registerC
+    onCreateBefore.replaceInstruction(
+        addFlagsIdx,
+        "invoke-static { v$windowReg }, $COMPAT_HELPER->configureTransparentSystemBars(Landroid/view/Window;)V",
+    )
+
+    // 2. SystemUiController.updateUiState(int, String): re-assert transparent system bars on every
+    //    status bar visibility/mode update so OEM SystemUI never reintroduces a contrast scrim.
+    val sysUiCtrl = mutableClassDefBy("Lcom/miui/home/launcher/util/SystemUiController;")
+    val updateUiState = sysUiCtrl.findMethodOrThrow(
+        "updateUiState",
+        listOf("I", "Ljava/lang/String;"),
+        "V",
+    )
+    updateUiState.addInstructions(
+        0,
+        """
+            iget-object v0, p0, Lcom/miui/home/launcher/util/SystemUiController;->mWindow:Landroid/view/Window;
+            invoke-static { v0 }, $COMPAT_HELPER->configureTransparentSystemBars(Landroid/view/Window;)V
+        """.trimIndent(),
+    )
+}
+
+private fun patchExpandedHomeScreenGrids() {
+    // 1. Raise maximum Home & App Drawer column count from 5 to 6.
+    mutableClassDefBy("Lcom/miui/home/launcher/compat/LauncherCellCountDefaultMin;")
+        .findMethodOrThrow("getCellCountXMax", emptyList(), "I")
+        .replaceBody(
+            locals = 1,
+            smali = """
+                const/4 v0, 0x6
+                return v0
+            """.trimIndent(),
+        )
+    mutableClassDefBy("Lcom/miui/home/launcher/compat/LauncherCellCountDefaultMax;")
+        .findMethodOrThrow("getCellCountXMax", emptyList(), "I")
+        .replaceBody(
+            locals = 1,
+            smali = """
+                const/4 v0, 0x6
+                return v0
+            """.trimIndent(),
+        )
+
+    // 2. Treat 5 and 6 columns as dense layouts and allow up to 6 dock icons in 6-column mode.
+    mutableClassDefBy("Lcom/miui/home/common/device/DeviceConfigs;")
+        .findMethodOrThrow("isDenseLayout", emptyList(), "Z")
+        .replaceBody(
+            locals = 2,
+            smali = """
+                invoke-static {}, Lcom/miui/home/common/device/DeviceConfigs;->getCellCountX()I
+                move-result v0
+                const/4 v1, 0x5
+                if-lt v0, v1, :not_dense
+                const/4 v0, 0x1
+                return v0
+                :not_dense
+                const/4 v0, 0x0
+                return v0
+            """.trimIndent(),
+        )
+    mutableClassDefBy("Lcom/miui/home/launcher/DeviceConfig;")
+        .findMethodOrThrow("calHotseatMaxCount", emptyList(), "I")
+        .replaceBody(
+            locals = 2,
+            smali = """
+                invoke-static {}, Lcom/miui/home/launcher/allapps/LauncherModeController;->isElderlyManMode()Z
+                move-result v0
+                if-eqz v0, :not_elderly
+                const/4 v0, 0x4
+                return v0
+                :not_elderly
+                invoke-static {}, Lcom/miui/home/common/device/DeviceConfigs;->getCellCountX()I
+                move-result v0
+                const/4 v1, 0x6
+                if-le v0, v1, :check_min
+                const/4 v0, 0x6
+                return v0
+                :check_min
+                const/4 v1, 0x5
+                if-ge v0, v1, :done_hotseat
+                const/4 v0, 0x5
+                :done_hotseat
+                return v0
+            """.trimIndent(),
+        )
+
+    // 3. Icon scale bounds, default icon scale, and label text size for 6-column grids.
+    val gridConfigUtil = mutableClassDefBy("Lcom/miui/home/common/utils/GridConfigUtil;")
+    val getScaleScope = gridConfigUtil.findMethodOrThrow("getScaleScopeByCellCount", listOf("I"), "Landroid/util/Pair;")
+    val firstScaleScopeInsn = getScaleScope.instructions.first()
+    getScaleScope.addInstructionsWithLabels(
+        0,
+        """
+            invoke-static { p0 }, $COMPAT_HELPER->getGridIconScaleScope(I)Landroid/util/Pair;
+            move-result-object v0
+            if-eqz v0, :stock_scale_scope
+            return-object v0
+        """.trimIndent(),
+        ExternalLabel("stock_scale_scope", firstScaleScopeInsn),
+    )
+
+    val getDefaultScale = gridConfigUtil.findMethodOrThrow("getDefaultScaleByCellCount", listOf("I"), "F")
+    val firstDefaultScaleInsn = getDefaultScale.instructions.first()
+    getDefaultScale.addInstructionsWithLabels(
+        0,
+        """
+            invoke-static { p0 }, $COMPAT_HELPER->getGridDefaultIconScale(I)F
+            move-result v0
+            const/4 v1, 0x0
+            cmpl-float v1, v0, v1
+            if-ltz v1, :stock_default_scale
+            return v0
+        """.trimIndent(),
+        ExternalLabel("stock_default_scale", firstDefaultScaleInsn),
+    )
+
+    val textSizeConfig = mutableClassDefBy("Lcom/miui/home/common/gridconfig/TextSizeConfig;")
+    val calTextSize = textSizeConfig.findMethodOrThrow("calTextSize", listOf("F", "F"), "F")
+    val firstTextSizeInsn = calTextSize.instructions.first()
+    calTextSize.addInstructionsWithLabels(
+        0,
+        """
+            iget v0, p0, Lcom/miui/home/common/gridconfig/TextSizeConfig;->currentColumn:I
+            const/4 v1, 0x6
+            if-lt v0, v1, :stock_text_size
+            const/high16 v0, 0x41200000
+            mul-float/2addr v0, p2
+            mul-float/2addr v0, p1
+            return v0
+        """.trimIndent(),
+        ExternalLabel("stock_text_size", firstTextSizeInsn),
+    )
+
+    // 4. Support extended layout type encoding (type = cols * 100 + rows for custom grids)
+    //    while remaining 100% backward compatible with stock types 0, 1, and 2.
+    val layoutType = mutableClassDefBy("Lcom/miui/home/common/LauncherLayoutType;")
+    layoutType.findMethodOrThrow("getCellXFromLayoutType", listOf("I"), "I").replaceBody(
+        locals = 2,
+        smali = """
+            invoke-static { p1 }, $COMPAT_HELPER->getCellXFromLayoutType(I)I
+            move-result v0
+            if-ltz v0, :check_stock_map
+            return v0
+            :check_stock_map
+            sget-object v0, Lcom/miui/home/common/LauncherLayoutType;->LAYOUT_TYPE_TO_CELL_X_MAP:Ljava/util/HashMap;
+            invoke-static { p1 }, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+            move-result-object v1
+            invoke-virtual { v0, v1 }, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            check-cast v0, Ljava/lang/Integer;
+            if-eqz v0, :fallback_cell_x
+            invoke-virtual { v0 }, Ljava/lang/Integer;->intValue()I
+            move-result v0
+            return v0
+            :fallback_cell_x
+            invoke-static {}, Lcom/miui/home/common/device/DeviceConfigs;->getCellCountX()I
+            move-result v0
+            return v0
+        """.trimIndent(),
+    )
+
+    layoutType.findMethodOrThrow("getCurrentTypeName", emptyList(), "Ljava/lang/String;").replaceBody(
+        locals = 2,
+        smali = """
+            iget v0, p0, Lcom/miui/home/common/LauncherLayoutType;->mCurrentType:I
+            invoke-static { v0 }, $COMPAT_HELPER->getCustomLayoutTypeName(I)Ljava/lang/String;
+            move-result-object v1
+            if-eqz v1, :stock_type_name
+            return-object v1
+            :stock_type_name
+            sget-object v1, Lcom/miui/home/common/LauncherLayoutType;->sTrackLayoutTypeName:Ljava/util/HashMap;
+            invoke-static { v0 }, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+            move-result-object v0
+            invoke-virtual { v1, v0 }, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            check-cast v0, Ljava/lang/String;
+            return-object v0
+        """.trimIndent(),
+    )
+
+    val getDefaultType = layoutType.findMethodOrThrow("getDefaultTypeWithSearchBarStatus", listOf("I"), "I")
+    val firstDefaultTypeInsn = getDefaultType.instructions.first()
+    getDefaultType.addInstructionsWithLabels(
+        0,
+        """
+            iget v0, p0, Lcom/miui/home/common/LauncherLayoutType;->mCurrentType:I
+            const/16 v1, 0x64
+            if-lt v0, v1, :stock_default_layout
+            invoke-virtual { p0, p1, v0 }, Lcom/miui/home/common/LauncherLayoutType;->isLayoutAndSearchTypeSupported(II)Z
+            move-result v1
+            if-eqz v1, :stock_default_layout
+            return v0
+        """.trimIndent(),
+        ExternalLabel("stock_default_layout", firstDefaultTypeInsn),
+    )
+
+    // 5. Row count computation & balanced vertical row height distribution for custom grids.
+    val phoneRules = mutableClassDefBy("Lcom/miui/home/common/gridconfig/PhoneDeviceRules;")
+    phoneRules.findMethodOrThrow(
+        "calCellCountYWithGridHeightAndLayoutType",
+        listOf("I", "I"),
+        "I",
+    ).replaceBody(
+        locals = 3,
+        smali = """
+            iget v0, p0, Lcom/miui/home/common/gridconfig/GridSizeCalRules;->mCellWidth:I
+            if-nez v0, :calc_grid_y
+            iget v0, p0, Lcom/miui/home/common/gridconfig/GridSizeCalRules;->mCellCountY:I
+            return v0
+            :calc_grid_y
+            invoke-static {}, Lcom/miui/home/common/LauncherLayoutType;->getInstance()Lcom/miui/home/common/LauncherLayoutType;
+            move-result-object v0
+            invoke-virtual { v0, p2 }, Lcom/miui/home/common/LauncherLayoutType;->getCellXFromLayoutType(I)I
+            move-result v0
+            invoke-direct { p0, v0 }, Lcom/miui/home/common/gridconfig/PhoneDeviceRules;->getCellWidth(I)I
+            move-result v1
+            iget v2, p0, Lcom/miui/home/common/gridconfig/GridSizeCalRules;->mCellCountY:I
+            invoke-static { p1, v1, p2, v2 }, $COMPAT_HELPER->computeGridCellCountY(IIII)I
+            move-result v0
+            return v0
+        """.trimIndent(),
+    )
+
+    val gridRules = mutableClassDefBy("Lcom/miui/home/common/gridconfig/GridSizeCalRules;")
+    val calVarHeight = gridRules.findMethodOrThrow("calVariableHeight", listOf("I", "I"), "Z")
+    val firstVarHeightInsn = calVarHeight.instructions.first()
+    calVarHeight.addInstructionsWithLabels(
+        0,
+        """
+            invoke-static { p0, p1, p2 }, $COMPAT_HELPER->applyCustomGridVariableHeight(Ljava/lang/Object;II)I
+            move-result v0
+            if-ltz v0, :stock_var_height
+            return v0
+        """.trimIndent(),
+        ExternalLabel("stock_var_height", firstVarHeightInsn),
+    )
+
+    // 6. Enable horizontal carousel scrolling in LayoutPreviewView (mode 7) and populate up to 10
+    //    screen-adapted Home screen grid pills across 4, 5, and 6 columns.
+    val layoutPreview = mutableClassDefBy("Lcom/miui/home/launcher/LayoutPreviewView;")
+    layoutPreview.findMethodOrThrow("initWidgetThumbnailView", emptyList(), "V").replaceBody(
+        locals = 2,
+        smali = """
+            invoke-super { p0 }, Lcom/miui/home/launcher/EditingEntryThumbnailView;->initWidgetThumbnailView()V
+            const/4 v0, 0x7
+            const/4 v1, 0x1
+            invoke-virtual { p0, v0, v1 }, Lcom/miui/home/launcher/ScreenView;->setScreenLayoutMode(IZ)V
+            invoke-static {}, Lcom/miui/home/common/device/DeviceConfigs;->getLayoutPreviewBottomButtonGap()I
+            move-result v0
+            invoke-virtual { p0, v0 }, Lcom/miui/home/launcher/ScreenView;->setFixedGap(I)V
+            return-void
+        """.trimIndent(),
+    )
+    layoutPreview.findMethodOrThrow("prepareCellCountButton", emptyList(), "V").replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { p0 }, $COMPAT_HELPER->populateLayoutPreviewButtons(Ljava/lang/Object;)V
+            return-void
+        """.trimIndent(),
+    )
+    layoutPreview.findMethodOrThrow("prepareToShow", emptyList(), "V").replaceBody(
+        locals = 1,
+        smali = """
+            invoke-direct { p0 }, Lcom/miui/home/launcher/LayoutPreviewView;->prepareCellCountXYInUse()V
+            invoke-direct { p0 }, Lcom/miui/home/launcher/LayoutPreviewView;->prepareCellCountButton()V
+            invoke-virtual { p0 }, Lcom/miui/home/launcher/LayoutPreviewView;->reLoadThumbnails()V
+            const/4 v0, 0x0
+            invoke-virtual { p0, v0 }, Lcom/miui/home/launcher/LayoutPreviewView;->updateBorderLine(Z)V
+            invoke-static { p0 }, $COMPAT_HELPER->scrollLayoutPreviewToActive(Ljava/lang/Object;)V
+            return-void
+        """.trimIndent(),
+    )
+
+    mutableClassDefBy("Lcom/miui/home/launcher/EditingEntryThumbnailView;")
+        .findMethodOrThrow("isScrollable", emptyList(), "Z")
+        .replaceBody(
+            locals = 1,
+            smali = """
+                instance-of v0, p0, Lcom/miui/home/launcher/LayoutPreviewView;
+                return v0
+            """.trimIndent(),
+        )
 }
 
 private fun patchDefaultWorkspacePopulation() {
@@ -2923,6 +3327,41 @@ private fun patchNonXiaomiSettingsAndFallbacks() {
     }
 
     val onResumeSettings = homeSettings.findMethodOrThrow("onResume", emptyList(), "V")
+    // R8 clobbers p0 (v4) at the end of onResume() with `iget-object v4, v4, mDoubleTapLockPref`
+    // right before `return-void`, which previously passed a CheckBoxPreference instead of
+    // MiuiHomeSettings to refreshNonXiaomiHomeSettings(p0). Redirect that load/call to a dead
+    // scratch register so p0 stays `this` across every return site.
+    val resumeInsns = onResumeSettings.instructions.toList()
+    val resumeThisReg = (onResumeSettings.implementation?.registerCount ?: 1) - 1
+    val clobberIdx = resumeInsns.indexOfFirst { ins ->
+        ins.opcode == Opcode.IGET_OBJECT &&
+            ins is TwoRegisterInstruction &&
+            ins.registerA == resumeThisReg &&
+            ins.registerB == resumeThisReg &&
+            ((ins as? ReferenceInstruction)?.reference as? FieldReference)?.name == "mDoubleTapLockPref"
+    }
+    if (clobberIdx >= 0) {
+        val setCheckedIdx = (clobberIdx + 1 until minOf(clobberIdx + 4, resumeInsns.size)).firstOrNull { idx ->
+            val ins = resumeInsns[idx]
+            ins.opcode == Opcode.INVOKE_VIRTUAL &&
+                ins is FiveRegisterInstruction &&
+                ins.registerC == resumeThisReg &&
+                ((ins as? ReferenceInstruction)?.reference as? MethodReference)?.name == "setChecked"
+        } ?: throw PatchException(
+            "POCO Launcher: TwoStatePreference.setChecked não encontrado após mDoubleTapLockPref em MiuiHomeSettings.onResume",
+        )
+        val setCheckedIns = resumeInsns[setCheckedIdx] as FiveRegisterInstruction
+        val boolReg = setCheckedIns.registerD
+        val scratchReg = if (boolReg == 1) 2 else 1
+        onResumeSettings.replaceInstruction(
+            clobberIdx,
+            "iget-object v$scratchReg, v$resumeThisReg, Lcom/miui/home/settings/MiuiHomeSettings;->mDoubleTapLockPref:Lcom/miui/home/settings/preference/CheckBoxPreference;",
+        )
+        onResumeSettings.replaceInstruction(
+            setCheckedIdx,
+            "invoke-virtual { v$scratchReg, v$boolReg }, Landroidx/preference/TwoStatePreference;->setChecked(Z)V",
+        )
+    }
     val resumeReturns = onResumeSettings.instructions.withIndex()
         .filter { it.value.opcode == Opcode.RETURN_VOID }
         .map { it.index }

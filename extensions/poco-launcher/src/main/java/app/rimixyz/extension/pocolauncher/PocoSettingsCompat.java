@@ -52,6 +52,10 @@ public final class PocoSettingsCompat {
 
     private static final Set<String> DYNAMIC_OS_KEYS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "navigation_mode",
+            "navigation_bar_gesture_while_hidden",
+            "hide_navigationbar_enable",
+            "navigation_gesture_on",
+            "force_fsg_nav_bar",
             "enabled_notification_listeners",
             "enabled_accessibility_services",
             "accessibility_enabled",
@@ -537,6 +541,9 @@ public final class PocoSettingsCompat {
     // ==================== Settings.Global ====================
 
     public static boolean globalPutString(ContentResolver cr, String name, String value) {
+        if ("force_fsg_nav_bar".equals(name)) {
+            return true;
+        }
         if (writeLocal("global", name, value)) {
             notifyLocalObservers("global", name);
         }
@@ -556,6 +563,9 @@ public final class PocoSettingsCompat {
     }
 
     public static String globalGetString(ContentResolver cr, String name) {
+        if ("force_fsg_nav_bar".equals(name)) {
+            return PocoCompatHelper.isSystemGestureNavigationEnabled(PocoCompatHelper.getAppContext()) ? "1" : "0";
+        }
         String raw = lookupLocalRaw("global", name);
         if (raw != null) {
             return decodeLocal(raw);
@@ -575,6 +585,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int globalGetInt(ContentResolver cr, String name, int def) {
+        if ("force_fsg_nav_bar".equals(name)) {
+            return PocoCompatHelper.isSystemGestureNavigationEnabled(PocoCompatHelper.getAppContext()) ? 1 : 0;
+        }
         String raw = lookupLocalRaw("global", name);
         if (raw != null) {
             String v = decodeLocal(raw);
@@ -601,6 +614,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int globalGetInt(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
+        if ("force_fsg_nav_bar".equals(name)) {
+            return PocoCompatHelper.isSystemGestureNavigationEnabled(PocoCompatHelper.getAppContext()) ? 1 : 0;
+        }
         String raw = lookupLocalRaw("global", name);
         if (raw != null) {
             String v = decodeLocal(raw);
