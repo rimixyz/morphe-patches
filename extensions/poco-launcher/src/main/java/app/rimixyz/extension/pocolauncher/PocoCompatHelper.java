@@ -13,6 +13,7 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
+import android.content.ComponentCallbacks2;
 import android.content.ComponentName;
 import android.content.ContentProviderClient;
 import android.content.ContentResolver;
@@ -30,6 +31,8 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ShortcutInfo;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -58,9 +61,11 @@ import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceControl;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
@@ -79,6 +84,7 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -89,6 +95,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 
 /**
  * Public-SDK runtime compatibility helpers for POCO Launcher running rootless on non-Xiaomi
@@ -117,7 +124,22 @@ public final class PocoCompatHelper {
     private static volatile Class<?> sAutoLayoutHostClass;
     private static volatile boolean sAutoLayoutHostResolved;
     private static volatile boolean sHideAppsMigrationChecked;
+    private static volatile boolean sMemoryCallbacksRegistered;
+    private static volatile Display sDefaultDisplay;
+    private static volatile int sCachedTotalRamGb;
+    private static volatile Method sGetLauncherMethod;
+    private static volatile boolean sGetLauncherResolved;
+    private static volatile Method sSysPropGet;
+    private static volatile Method sSysPropGetInt;
+    private static volatile Method sSysPropGetBool;
+    private static volatile boolean sSysPropResolved;
     private static final ConcurrentHashMap<Object, CancellationSignal> ACTIVE_BIOMETRIC_SIGNALS =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> SYSPROP_RO_CACHE =
+            new ConcurrentHashMap<>();
+    private static final Set<String> ABSENT_PROVIDER_AUTHORITIES =
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final ConcurrentHashMap<String, Boolean> INSTALLED_PKG_CACHE =
             new ConcurrentHashMap<>();
 
     // ==================== Layout / setFrame Bridge ====================
@@ -185,6 +207,38 @@ public final class PocoCompatHelper {
         }
         Context app = context.getApplicationContext();
         sAppContext = app != null ? app : context;
+        registerMemoryTrimCallbacks(sAppContext);
+    }
+
+    private static void registerMemoryTrimCallbacks(Context ctx) {
+        if (sMemoryCallbacksRegistered || ctx == null) {
+            return;
+        }
+        synchronized (PocoCompatHelper.class) {
+            if (sMemoryCallbacksRegistered) {
+                return;
+            }
+            sMemoryCallbacksRegistered = true;
+            try {
+                ctx.registerComponentCallbacks(new ComponentCallbacks2() {
+                    @Override
+                    public void onTrimMemory(int level) {
+                        onAppTrimMemory(level);
+                    }
+
+                    @Override
+                    public void onConfigurationChanged(Configuration newConfig) {
+                        sDefaultDisplay = null;
+                    }
+
+                    @Override
+                    public void onLowMemory() {
+                        onAppTrimMemory(ComponentCallbacks2.TRIM_MEMORY_COMPLETE);
+                    }
+                });
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     public static Context getAppContext() {
@@ -375,6 +429,16 @@ public final class PocoCompatHelper {
     }
 
     public static int getRotation() {
+        Display cached = sDefaultDisplay;
+        if (cached != null) {
+            try {
+                if (cached.isValid()) {
+                    return cached.getRotation();
+                }
+            } catch (Throwable ignored) {
+            }
+            sDefaultDisplay = null;
+        }
         Context ctx = getAppContext();
         if (ctx != null) {
             try {
@@ -382,6 +446,7 @@ public final class PocoCompatHelper {
                 if (dm != null) {
                     Display d = dm.getDisplay(Display.DEFAULT_DISPLAY);
                     if (d != null) {
+                        sDefaultDisplay = d;
                         return d.getRotation();
                     }
                 }
@@ -554,19 +619,40 @@ public final class PocoCompatHelper {
         return moved;
     }
 
+    private static boolean isKnownAbsentAuthority(String authority) {
+        return authority != null && !"settings".equals(authority)
+                && ABSENT_PROVIDER_AUTHORITIES.contains(authority);
+    }
+
+    private static void markAbsentAuthority(String authority) {
+        if (authority != null && !authority.isEmpty() && !"settings".equals(authority)
+                && ABSENT_PROVIDER_AUTHORITIES.size() < 128) {
+            ABSENT_PROVIDER_AUTHORITIES.add(authority);
+        }
+    }
+
     public static boolean safeIsProviderExists(Context context, Uri uri) {
         if (context == null || uri == null) {
             return false;
         }
+        String auth = uri.getAuthority();
+        if (isKnownAbsentAuthority(auth)) {
+            return false;
+        }
         try (ContentProviderClient client = context.getContentResolver().acquireUnstableContentProviderClient(uri)) {
-            return client != null;
+            if (client != null) {
+                return true;
+            }
+            markAbsentAuthority(auth);
+            return false;
         } catch (Throwable ignored) {
+            markAbsentAuthority(auth);
             return false;
         }
     }
 
     public static void safeUpdateProviderData(Context context, Uri uri, ContentValues values) {
-        if (context == null || uri == null) {
+        if (context == null || uri == null || isKnownAbsentAuthority(uri.getAuthority())) {
             return;
         }
         try {
@@ -592,9 +678,14 @@ public final class PocoCompatHelper {
             return;
         }
         PocoSettingsCompat.registerLocalObserver(uri, observer);
+        String auth = uri.getAuthority();
+        if (isKnownAbsentAuthority(auth)) {
+            return;
+        }
         try {
             cr.registerContentObserver(uri, notifyForDescendants, observer);
         } catch (Throwable t) {
+            markAbsentAuthority(auth);
             Log.w(TAG, "Ignoring ContentObserver registration for " + uri + ": " + t.getMessage());
         }
     }
@@ -623,9 +714,14 @@ public final class PocoCompatHelper {
         if (cr == null || uri == null || method == null) {
             return null;
         }
+        String auth = uri.getAuthority();
+        if (isKnownAbsentAuthority(auth)) {
+            return null;
+        }
         try {
             return cr.call(uri, method, arg, extras);
         } catch (SecurityException | IllegalArgumentException t) {
+            markAbsentAuthority(auth);
             Log.w(TAG, "Ignoring missing/denied ContentProvider call " + uri + "#" + method + ": " + t.getMessage());
             return null;
         }
@@ -641,9 +737,13 @@ public final class PocoCompatHelper {
         if (cr == null || authority == null || method == null) {
             return null;
         }
+        if (isKnownAbsentAuthority(authority)) {
+            return null;
+        }
         try {
             return cr.call(authority, method, arg, extras);
         } catch (SecurityException | IllegalArgumentException t) {
+            markAbsentAuthority(authority);
             Log.w(TAG, "Ignoring missing/denied ContentProvider call " + authority + "#" + method + ": " + t.getMessage());
             return null;
         }
@@ -1151,9 +1251,13 @@ public final class PocoCompatHelper {
 
     private static Object getActiveLauncher() {
         try {
-            Class<?> appClass = Class.forName("com.miui.home.launcher.Application");
-            Method getLauncher = appClass.getMethod("getLauncher");
-            return getLauncher.invoke(null);
+            if (!sGetLauncherResolved) {
+                sGetLauncherResolved = true;
+                Class<?> appClass = Class.forName("com.miui.home.launcher.Application");
+                sGetLauncherMethod = appClass.getMethod("getLauncher");
+            }
+            Method m = sGetLauncherMethod;
+            return m != null ? m.invoke(null) : null;
         } catch (Throwable ignored) {
             return null;
         }
@@ -1163,21 +1267,44 @@ public final class PocoCompatHelper {
         return obj instanceof Number ? ((Number) obj).intValue() : 0;
     }
 
-    // ==================== Safe SystemProperties Reflection ====================
+    // ==================== Cached SystemProperties Reflection ====================
+
+    private static void ensureSysPropMethods() {
+        if (sSysPropResolved) {
+            return;
+        }
+        sSysPropResolved = true;
+        try {
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            sSysPropGet = sp.getMethod("get", String.class, String.class);
+            sSysPropGetInt = sp.getMethod("getInt", String.class, int.class);
+            sSysPropGetBool = sp.getMethod("getBoolean", String.class, boolean.class);
+        } catch (Throwable ignored) {
+        }
+    }
 
     public static String sysPropGet(String key, String def) {
         if (key == null || key.isEmpty()) {
             return def;
         }
-        String value = def;
-        try {
-            Class<?> sp = Class.forName("android.os.SystemProperties");
-            Method get = sp.getMethod("get", String.class, String.class);
-            Object res = get.invoke(null, key, def);
-            if (res instanceof String) {
-                value = (String) res;
+        boolean cacheableRo = key.startsWith("ro.");
+        if (cacheableRo) {
+            String cached = SYSPROP_RO_CACHE.get(key);
+            if (cached != null) {
+                return cached.isEmpty() ? (def != null ? def : "") : cached;
             }
-        } catch (Throwable ignored) {
+        }
+        ensureSysPropMethods();
+        String raw = null;
+        Method get = sSysPropGet;
+        if (get != null) {
+            try {
+                Object res = get.invoke(null, key, "");
+                if (res instanceof String) {
+                    raw = (String) res;
+                }
+            } catch (Throwable ignored) {
+            }
         }
         // LauncherSettings.<clinit> selects its ContentProvider authority by comparing
         // ro.miui.product.home against "com.mi.android.globallauncher". On non-Xiaomi ROMs
@@ -1185,37 +1312,516 @@ public final class PocoCompatHelper {
         // "com.miui.home.launcher.settings" (mismatching the manifest's
         // "com.mi.android.globallauncher.launcher.settings") and caused LauncherProvider to
         // throw SecurityException + Process.killProcess in an infinite loop on first boot.
-        if ("ro.miui.product.home".equals(key) && (value == null || value.isEmpty())) {
-            return "com.mi.android.globallauncher";
+        if ("ro.miui.product.home".equals(key) && (raw == null || raw.isEmpty())) {
+            raw = "com.mi.android.globallauncher";
         }
-        return value;
+        if (cacheableRo && SYSPROP_RO_CACHE.size() < 256) {
+            SYSPROP_RO_CACHE.put(key, raw != null ? raw : "");
+        }
+        if (raw == null || raw.isEmpty()) {
+            return def;
+        }
+        return raw;
     }
 
     public static int sysPropGetInt(String key, int def) {
         if (key == null || key.isEmpty()) {
             return def;
         }
-        try {
-            Class<?> sp = Class.forName("android.os.SystemProperties");
-            Method getInt = sp.getMethod("getInt", String.class, int.class);
-            Object res = getInt.invoke(null, key, def);
-            return res instanceof Integer ? (Integer) res : def;
-        } catch (Throwable ignored) {
-            return def;
+        if (key.startsWith("ro.")) {
+            String raw = sysPropGet(key, null);
+            if (raw == null || raw.isEmpty()) {
+                return def;
+            }
+            try {
+                return Integer.decode(raw);
+            } catch (Throwable ignored) {
+                return def;
+            }
         }
+        ensureSysPropMethods();
+        Method getInt = sSysPropGetInt;
+        if (getInt != null) {
+            try {
+                Object res = getInt.invoke(null, key, def);
+                return res instanceof Integer ? (Integer) res : def;
+            } catch (Throwable ignored) {
+            }
+        }
+        return def;
     }
 
     public static boolean sysPropGetBoolean(String key, boolean def) {
         if (key == null || key.isEmpty()) {
             return def;
         }
-        try {
-            Class<?> sp = Class.forName("android.os.SystemProperties");
-            Method getBool = sp.getMethod("getBoolean", String.class, boolean.class);
-            Object res = getBool.invoke(null, key, def);
-            return res instanceof Boolean ? (Boolean) res : def;
-        } catch (Throwable ignored) {
+        if (key.startsWith("ro.")) {
+            String raw = sysPropGet(key, null);
+            if (raw == null || raw.isEmpty()) {
+                return def;
+            }
+            if ("1".equals(raw) || "y".equalsIgnoreCase(raw) || "yes".equalsIgnoreCase(raw)
+                    || "true".equalsIgnoreCase(raw) || "on".equalsIgnoreCase(raw)) {
+                return true;
+            }
+            if ("0".equals(raw) || "n".equalsIgnoreCase(raw) || "no".equalsIgnoreCase(raw)
+                    || "false".equalsIgnoreCase(raw) || "off".equalsIgnoreCase(raw)) {
+                return false;
+            }
             return def;
+        }
+        ensureSysPropMethods();
+        Method getBool = sSysPropGetBool;
+        if (getBool != null) {
+            try {
+                Object res = getBool.invoke(null, key, def);
+                return res instanceof Boolean ? (Boolean) res : def;
+            } catch (Throwable ignored) {
+            }
+        }
+        return def;
+    }
+
+    // ==================== Thread-Safe Negative-Caching ReflectUtils Backend ====================
+
+    private static final Object REFLECT_MISSING = new Object();
+    private static final ConcurrentHashMap<String, Object> REFLECT_CLASS_CACHE =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ReflectMethodKey, Object> REFLECT_METHOD_CACHE =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ReflectFieldKey, Object> REFLECT_FIELD_CACHE =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ReflectMethodKey, Object> REFLECT_CTOR_CACHE =
+            new ConcurrentHashMap<>();
+
+    private static final class ReflectMethodKey {
+        final Class<?> cls;
+        final String name;
+        final Class<?>[] params;
+        final boolean declared;
+        final int hash;
+
+        ReflectMethodKey(Class<?> cls, String name, Class<?>[] params, boolean declared) {
+            this.cls = cls;
+            this.name = name;
+            this.params = params;
+            this.declared = declared;
+            int h = cls.hashCode() * 31 + name.hashCode();
+            h = h * 31 + (declared ? 1 : 0);
+            if (params != null) {
+                for (Class<?> p : params) {
+                    h = h * 31 + (p != null ? p.hashCode() : 0);
+                }
+            }
+            this.hash = h;
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ReflectMethodKey)) return false;
+            ReflectMethodKey other = (ReflectMethodKey) o;
+            return hash == other.hash
+                    && declared == other.declared
+                    && cls == other.cls
+                    && name.equals(other.name)
+                    && Arrays.equals(params, other.params);
+        }
+    }
+
+    private static final class ReflectFieldKey {
+        final Class<?> cls;
+        final String name;
+        final int hash;
+
+        ReflectFieldKey(Class<?> cls, String name) {
+            this.cls = cls;
+            this.name = name;
+            this.hash = cls.hashCode() * 31 + name.hashCode();
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ReflectFieldKey)) return false;
+            ReflectFieldKey other = (ReflectFieldKey) o;
+            return hash == other.hash && cls == other.cls && name.equals(other.name);
+        }
+    }
+
+    public static Class<?> reflectGetClass(String className) {
+        if (className == null || className.isEmpty()) {
+            return null;
+        }
+        Object cached = REFLECT_CLASS_CACHE.get(className);
+        if (cached != null) {
+            return cached == REFLECT_MISSING ? null : (Class<?>) cached;
+        }
+        Class<?> resolved = null;
+        try {
+            resolved = Class.forName(className);
+        } catch (Throwable ignored) {
+        }
+        if (REFLECT_CLASS_CACHE.size() < 512) {
+            REFLECT_CLASS_CACHE.put(className, resolved != null ? resolved : REFLECT_MISSING);
+        }
+        return resolved;
+    }
+
+    public static Method reflectGetMethod(
+            Class<?> cls,
+            String name,
+            String ignoredSig,
+            Class<?>... params
+    ) {
+        return reflectLookupMethod(cls, name, params, false);
+    }
+
+    public static Method reflectGetDeclaredMethod(
+            Class<?> cls,
+            String name,
+            String ignoredSig,
+            Class<?>... params
+    ) {
+        return reflectLookupMethod(cls, name, params, true);
+    }
+
+    public static boolean reflectHasMethod(Class<?> cls, String name, Class<?>[] params) {
+        return reflectLookupMethod(cls, name, params, true) != null;
+    }
+
+    private static Method reflectLookupMethod(
+            Class<?> cls,
+            String name,
+            Class<?>[] params,
+            boolean declared
+    ) {
+        if (cls == null || name == null) {
+            return null;
+        }
+        ReflectMethodKey key = new ReflectMethodKey(cls, name, params, declared);
+        Object cached = REFLECT_METHOD_CACHE.get(key);
+        if (cached != null) {
+            return cached == REFLECT_MISSING ? null : (Method) cached;
+        }
+        Method resolved = null;
+        try {
+            resolved = declared ? cls.getDeclaredMethod(name, params) : cls.getMethod(name, params);
+            resolved.setAccessible(true);
+        } catch (Throwable ignored) {
+        }
+        if (REFLECT_METHOD_CACHE.size() < 1024) {
+            Class<?>[] keyParams = params != null ? params.clone() : null;
+            REFLECT_METHOD_CACHE.put(
+                    new ReflectMethodKey(cls, name, keyParams, declared),
+                    resolved != null ? resolved : REFLECT_MISSING);
+        }
+        return resolved;
+    }
+
+    public static Field reflectGetField(Class<?> cls, String name, String ignoredSig) {
+        if (cls == null || name == null) {
+            return null;
+        }
+        ReflectFieldKey key = new ReflectFieldKey(cls, name);
+        Object cached = REFLECT_FIELD_CACHE.get(key);
+        if (cached != null) {
+            return cached == REFLECT_MISSING ? null : (Field) cached;
+        }
+        Field resolved = null;
+        Class<?> cur = cls;
+        while (cur != null) {
+            try {
+                resolved = cur.getDeclaredField(name);
+                resolved.setAccessible(true);
+                break;
+            } catch (Throwable ignored) {
+                cur = cur.getSuperclass();
+            }
+        }
+        if (REFLECT_FIELD_CACHE.size() < 1024) {
+            REFLECT_FIELD_CACHE.put(key, resolved != null ? resolved : REFLECT_MISSING);
+        }
+        return resolved;
+    }
+
+    public static Object reflectGetObjectField(Object obj, String name) {
+        if (obj == null || name == null) {
+            return null;
+        }
+        Field f = reflectGetField(obj.getClass(), name, null);
+        if (f == null) {
+            return null;
+        }
+        try {
+            return f.get(obj);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    public static Object reflectCallObjectMethod(
+            Object obj,
+            Class<?> retType,
+            String name,
+            Class<?>[] params,
+            Object... args
+    ) {
+        if (obj == null || name == null) {
+            return null;
+        }
+        Method m = reflectLookupMethod(obj.getClass(), name, params, true);
+        if (m == null) {
+            return null;
+        }
+        try {
+            return m.invoke(obj, args);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    public static Object reflectCallObjectMethod2(
+            Object obj,
+            Class<?> retType,
+            String name,
+            Class<?>[] params,
+            Object... args
+    ) {
+        if (obj == null || name == null) {
+            return null;
+        }
+        Method m = reflectLookupMethod(obj.getClass(), name, params, false);
+        if (m == null) {
+            return null;
+        }
+        try {
+            return m.invoke(obj, args);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    public static Object reflectCallStaticMethod(
+            String className,
+            Class<?> retType,
+            String name,
+            Class<?>[] params,
+            Object... args
+    ) {
+        Class<?> cls = reflectGetClass(className);
+        if (cls == null) {
+            return null;
+        }
+        return reflectInvokeObject(cls, null, name, retType, params, args);
+    }
+
+    public static Object reflectCreateNewInstance(
+            Class<?> cls,
+            Class<?>[] params,
+            Object... args
+    ) {
+        if (cls == null) {
+            return null;
+        }
+        ReflectMethodKey key = new ReflectMethodKey(cls, "<init>", params, false);
+        Object cached = REFLECT_CTOR_CACHE.get(key);
+        Constructor<?> ctor;
+        if (cached != null) {
+            if (cached == REFLECT_MISSING) {
+                return null;
+            }
+            ctor = (Constructor<?>) cached;
+        } else {
+            ctor = null;
+            try {
+                ctor = cls.getConstructor(params);
+            } catch (Throwable ignored) {
+            }
+            if (REFLECT_CTOR_CACHE.size() < 256) {
+                Class<?>[] keyParams = params != null ? params.clone() : null;
+                REFLECT_CTOR_CACHE.put(
+                        new ReflectMethodKey(cls, "<init>", keyParams, false),
+                        ctor != null ? ctor : REFLECT_MISSING);
+            }
+        }
+        if (ctor == null) {
+            return null;
+        }
+        try {
+            return ctor.newInstance(args);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    public static void reflectInvoke(
+            Class<?> cls,
+            Object obj,
+            String name,
+            Class<?> retType,
+            Class<?>[] params,
+            Object... args
+    ) {
+        Method m = reflectLookupMethod(cls, name, params, false);
+        if (m == null) {
+            return;
+        }
+        try {
+            m.invoke(obj, args);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static Object reflectInvokeObject(
+            Class<?> cls,
+            Object obj,
+            String name,
+            Class<?> retType,
+            Class<?>[] params,
+            Object... args
+    ) {
+        Method m = reflectLookupMethod(cls, name, params, false);
+        if (m == null) {
+            return null;
+        }
+        try {
+            return m.invoke(obj, args);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    public static Object reflectInvokeObjectDefault(
+            Class<?> cls,
+            Object obj,
+            String name,
+            Class<?> retType,
+            Object defaultValue,
+            Class<?>[] params,
+            Object... args
+    ) {
+        Method m = reflectLookupMethod(cls, name, params, false);
+        if (m == null) {
+            return defaultValue;
+        }
+        try {
+            return m.invoke(obj, args);
+        } catch (Throwable ignored) {
+            return defaultValue;
+        }
+    }
+
+    // ==================== Overlay Client Guards & RAM Trimming ====================
+
+    /**
+     * Skips creating dead Minus-1 overlay {@code LauncherClient} connections (which repeatedly
+     * attempt {@code bindService} on every {@code onStart}/{@code onResume}/{@code onAttachedToWindow})
+     * when neither Xiaomi App Vault nor Personal Assistant is installed.
+     */
+    public static boolean shouldCreateMinusScreenClient(Context context, String packageName) {
+        Context ctx = context != null ? context : getAppContext();
+        if (ctx == null) {
+            return false;
+        }
+        if (packageName != null && !"com.google.android.googlequicksearchbox".equals(packageName)) {
+            return isPackageInstalled(ctx, packageName);
+        }
+        // Google Discover WINDOW_OVERLAY requires OEM-allowlisted Xiaomi framework/signing;
+        // only bind when Xiaomi minus-screen infrastructure is actually present.
+        return isPackageInstalled(ctx, "com.mi.globalminusscreen")
+                || isPackageInstalled(ctx, "com.miui.personalassistant");
+    }
+
+    /**
+     * Skips creating the International Search overlay client when Xiaomi AppFinder isn't installed.
+     */
+    public static boolean shouldCreateAppFinderClient(Context context) {
+        Context ctx = context != null ? context : getAppContext();
+        return ctx != null && isPackageInstalled(ctx, "com.mi.appfinder");
+    }
+
+    /**
+     * Releases non-essential bitmap, MAML, and file caches when Android trims launcher memory
+     * in background (preserving active desktop icons on {@code TRIM_MEMORY_UI_HIDDEN} so returning
+     * Home stays instantaneous).
+     */
+    public static void onAppTrimMemory(int level) {
+        if (level < ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            return;
+        }
+        try {
+            PocoSettingsCompat.pruneDeadObservers();
+        } catch (Throwable ignored) {
+        }
+        try {
+            Class<?> rmCls = reflectGetClass("com.miui.maml.ResourceManager");
+            if (rmCls != null) {
+                Method clear = reflectLookupMethod(rmCls, "clear", null, false);
+                if (clear != null) {
+                    clear.invoke(null);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            Class<?> faCls = reflectGetClass("com.miui.home.library.utils.FileAccessable$Factory");
+            if (faCls != null) {
+                Method clear = reflectLookupMethod(faCls, "clearCache", null, false);
+                if (clear != null) {
+                    clear.invoke(null);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+            try {
+                Class<?> icCls = reflectGetClass("miui.content.res.IconCustomizer");
+                if (icCls != null) {
+                    Method clear = reflectLookupMethod(icCls, "clearCache", null, false);
+                    if (clear != null) {
+                        clear.invoke(null);
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
+                Class<?> modelCompCls = reflectGetClass("com.miui.home.model.api.IModel$Companion");
+                if (modelCompCls != null) {
+                    Field compField = reflectGetField(reflectGetClass("com.miui.home.model.api.IModel"), "Companion", null);
+                    Object comp = compField != null ? compField.get(null) : null;
+                    Object model = comp != null ? invokeZeroArg(comp, "getInstance") : null;
+                    Object iconCache = model != null ? invokeZeroArg(model, "getIconCache") : null;
+                    Object bigCache = iconCache != null ? readField(iconCache, "mBigIconCache") : null;
+                    if (bigCache != null) {
+                        invokeZeroArg(bigCache, "clear");
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
+                Class<?> rmCls = reflectGetClass("com.miui.home.recents.RecentsModel");
+                Field instField = rmCls != null ? reflectGetField(rmCls, "INSTANCE", null) : null;
+                Object recentsModel = instField != null ? instField.get(null) : null;
+                Object taskLoader = recentsModel != null ? invokeZeroArg(recentsModel, "getTaskLoader") : null;
+                if (taskLoader != null) {
+                    Method trim = reflectLookupMethod(taskLoader.getClass(), "onTrimMemory", new Class<?>[]{int.class}, false);
+                    if (trim != null) {
+                        trim.invoke(taskLoader, level);
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -2513,7 +3119,9 @@ public final class PocoCompatHelper {
 
     /**
      * Hooked at the end of {@code HideAppsUnlockContainerView.onFinishInflate()} so tapping the
-     * fingerprint icon re-triggers {@link BiometricPrompt} after dismissing it once.
+     * fingerprint icon re-triggers {@link BiometricPrompt} after dismissing it once, and applies
+     * Dark/Light mode colors immediately (including when inflated inside the Disable Hide Apps
+     * confirmation sheet).
      */
     public static void wireHideAppsUnlockView(final Object unlockView) {
         if (unlockView == null) {
@@ -2533,6 +3141,280 @@ public final class PocoCompatHelper {
                 });
             }
         } catch (Throwable ignored) {
+        }
+        try {
+            invokeZeroArg(unlockView, "updateColorForUiMode");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Binds {@code HideAppsViewPlaceHolderSheet.hideAppsViewPlaceHolder} after XML inflation.
+     * POCO's original 2-arg Kotlin constructor called {@code findViewById} before
+     * {@link android.view.LayoutInflater} inflated children, always throwing
+     * {@code InflateException(NullPointerException)} and trapping users on the password guide.
+     */
+    public static void bindHideAppsPlaceHolderSheet(View sheet) {
+        if (sheet == null) {
+            return;
+        }
+        try {
+            if (readField(sheet, "hideAppsViewPlaceHolder") != null) {
+                return;
+            }
+            View holder = null;
+            Context ctx = sheet.getContext();
+            if (ctx != null && ctx.getResources() != null) {
+                int id = ctx.getResources().getIdentifier(
+                        "hide_apps_view_place_holder", "id", ctx.getPackageName());
+                if (id != 0) {
+                    holder = sheet.findViewById(id);
+                }
+            }
+            if (holder == null && sheet instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) sheet;
+                for (int i = 0; i < vg.getChildCount(); i++) {
+                    View child = vg.getChildAt(i);
+                    if (child != null && child.getClass().getName().endsWith("HideAppsViewPlaceHolder")) {
+                        holder = child;
+                        break;
+                    }
+                }
+            }
+            if (holder != null) {
+                writeField(sheet, "hideAppsViewPlaceHolder", holder);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "bindHideAppsPlaceHolderSheet failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Replacement for {@code HideAppsViewPlaceHolder.hide()}.
+     *
+     * <p>The original {@code hide()} checked {@code getAnimation() != null && getAnimation().hasStarted()},
+     * which remained {@code true} after {@code show()} started {@code mEnterAnim} without ever
+     * clearing it — causing {@code hide()} to skip {@code mExitAnim} and {@code mCurrentView.onExit()}
+     * so {@code onPasswordSetSuccess()} was NEVER called after confirming a new pattern.
+     */
+    public static void closeHideAppsViewPlaceHolder(View placeHolder) {
+        if (placeHolder == null) {
+            return;
+        }
+        try {
+            placeHolder.clearAnimation();
+        } catch (Throwable ignored) {
+        }
+        Object currentView = readField(placeHolder, "mCurrentView");
+        Object closeCallback = readField(placeHolder, "mCloseCallback");
+        writeField(placeHolder, "mCurrentView", null);
+        writeField(placeHolder, "mCloseCallback", null);
+
+        if (currentView != null) {
+            boolean pwdSetSuccess = currentView.getClass().getName().endsWith("HideAppsSetPasswordContainerView")
+                    && Boolean.TRUE.equals(readField(currentView, "setPasswordSuccess"))
+                    && hasHideAppsPassword();
+            if (pwdSetSuccess) {
+                prepareLauncherForHideAppsContent();
+            }
+            try {
+                invokeZeroArg(currentView, "onExit");
+            } catch (Throwable t) {
+                Log.w(TAG, "HideApps currentView.onExit failed: " + t.getMessage());
+            }
+            try {
+                invokeZeroArg(currentView, "onHide");
+            } catch (Throwable ignored) {
+            }
+        }
+
+        try {
+            if (placeHolder instanceof ViewGroup) {
+                ((ViewGroup) placeHolder).removeAllViews();
+            }
+            placeHolder.setVisibility(View.GONE);
+        } catch (Throwable ignored) {
+        }
+
+        if (closeCallback instanceof Supplier) {
+            try {
+                ((Supplier<?>) closeCallback).get();
+            } catch (Throwable t) {
+                Log.w(TAG, "HideApps closeCallback failed: " + t.getMessage());
+            }
+        }
+    }
+
+    private static void prepareLauncherForHideAppsContent() {
+        try {
+            Object launcher = getActiveLauncher();
+            if (launcher == null) {
+                return;
+            }
+            Object stateManager = invokeZeroArg(launcher, "getStateManager");
+            Class<?> stateCls = reflectGetClass("com.miui.home.launcher.LauncherState");
+            Object allAppsState = stateCls != null ? stateCls.getField("ALL_APPS").get(null) : null;
+            if (stateManager != null && allAppsState != null) {
+                Object curState = invokeZeroArg(stateManager, "getState");
+                if (curState != allAppsState) {
+                    Method goTo = findMethodInHierarchy(
+                            stateManager.getClass(), "goToState", stateCls, boolean.class);
+                    if (goTo != null) {
+                        goTo.invoke(stateManager, allAppsState, Boolean.FALSE);
+                    }
+                }
+            }
+            Object appsView = invokeZeroArg(launcher, "getAppsView");
+            if (appsView != null) {
+                Object hideContainer = readField(appsView, "mHideAppsContainerView");
+                if (hideContainer == null) {
+                    invokeZeroArg(appsView, "createHideAppContainerView");
+                    hideContainer = readField(appsView, "mHideAppsContainerView");
+                }
+                if (hideContainer instanceof View) {
+                    ensureHideAppsListSynced((View) hideContainer);
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "prepareLauncherForHideAppsContent failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Ensures {@code HideAppsContentView} and {@code HideAppsSelectView} are populated from
+     * {@code AllAppsStore} before entering the Hidden Apps vault (prevents an empty app picker
+     * when Hide Apps is enabled for the first time without restarting the launcher).
+     */
+    public static void ensureHideAppsListSynced(View hideAppsContainerView) {
+        if (hideAppsContainerView == null) {
+            return;
+        }
+        try {
+            Method setApps = findMethodInHierarchy(
+                    hideAppsContainerView.getClass(), "setApps", List.class);
+            if (setApps != null) {
+                setApps.invoke(hideAppsContainerView, Collections.emptyList());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Hooked at the end of {@code HideAppsSetPasswordContainerView.onFinishInflate()} to fix
+     * Dark Mode contrast on the bottom action buttons (whose selector hardcoded black text with
+     * no night-mode override) and update the pattern dot bitmaps for the active UI mode.
+     */
+    public static void styleHideAppsSetPasswordButtons(View container) {
+        if (container == null) {
+            return;
+        }
+        try {
+            boolean darkMode = false;
+            try {
+                Class<?> dcCls = reflectGetClass("com.miui.home.common.device.DeviceConfigs");
+                if (dcCls != null) {
+                    darkMode = Boolean.TRUE.equals(dcCls.getMethod("isDarkMode").invoke(null));
+                }
+            } catch (Throwable ignored) {
+            }
+            if (!darkMode && container.getResources() != null) {
+                int nightMask = container.getResources().getConfiguration().uiMode
+                        & Configuration.UI_MODE_NIGHT_MASK;
+                darkMode = (nightMask == Configuration.UI_MODE_NIGHT_YES);
+            }
+
+            Object mediator = readField(container, "passwordUnlockMediator");
+            if (mediator != null) {
+                try {
+                    invokeZeroArg(mediator, "updateColor");
+                } catch (Throwable ignored) {
+                }
+            }
+
+            if (darkMode) {
+                int enabledColor = 0xE6FFFFFF;
+                int disabledColor = 0x4DFFFFFF;
+                int[][] states = new int[][]{
+                        new int[]{-android.R.attr.state_enabled},
+                        new int[]{android.R.attr.state_enabled},
+                        new int[]{}
+                };
+                ColorStateList darkBtnColors = new ColorStateList(
+                        states, new int[]{disabledColor, enabledColor, enabledColor});
+
+                Object leftBtn = readField(container, "mFooterLeftButton");
+                if (leftBtn instanceof TextView) {
+                    ((TextView) leftBtn).setTextColor(darkBtnColors);
+                }
+                Object rightBtn = readField(container, "mFooterRightButton");
+                if (rightBtn instanceof TextView) {
+                    ((TextView) rightBtn).setTextColor(darkBtnColors);
+                }
+                Object titleTv = readField(container, "unlockTitle");
+                if (titleTv instanceof TextView) {
+                    ((TextView) titleTv).setTextColor(enabledColor);
+                }
+                Object descTv = readField(container, "unlockDescribe");
+                if (descTv instanceof TextView) {
+                    ((TextView) descTv).setTextColor(0x99FFFFFF);
+                }
+                Object titleBarLeft = readField(container, "titleBarLeftBtn");
+                if (titleBarLeft != null) {
+                    try {
+                        invokeOneArg(titleBarLeft, "setPatternColor", int.class, 0xB3FFFFFF);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                Object titleBarTitle = readField(container, "titleBarTitleContent");
+                if (titleBarTitle instanceof ViewGroup) {
+                    ViewGroup switcher = (ViewGroup) titleBarTitle;
+                    for (int i = 0; i < switcher.getChildCount(); i++) {
+                        View child = switcher.getChildAt(i);
+                        if (child instanceof TextView) {
+                            ((TextView) child).setTextColor(enabledColor);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "styleHideAppsSetPasswordButtons failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Replacement for {@code HideAppsPasswordGuideView.lambda$onFinishInflate$0(View)}.
+     * If a Hide Apps pattern is already configured, switches the vault to its unlock screen
+     * instead of returning early and leaving the user stranded on the "Set password" guide.
+     */
+    public static void onHideAppsPasswordGuideClick(View view) {
+        try {
+            if (hasHideAppsPassword()) {
+                Object launcher = getActiveLauncher();
+                if (launcher != null) {
+                    Object appsView = invokeZeroArg(launcher, "getAppsView");
+                    Object hideContainer = appsView != null
+                            ? readField(appsView, "mHideAppsContainerView")
+                            : null;
+                    if (hideContainer != null) {
+                        if (hideContainer instanceof View) {
+                            ensureHideAppsListSynced((View) hideContainer);
+                        }
+                        invokeZeroArg(hideContainer, "changeToUnlockView");
+                        invokeZeroArg(hideContainer, "onShow");
+                        return;
+                    }
+                }
+            }
+            Class<?> mgrCls = reflectGetClass(
+                    "com.miui.home.launcher.allapps.hideapps.HideAppDialogManager");
+            if (mgrCls != null) {
+                Object mgr = mgrCls.getMethod("getInstance").invoke(null);
+                if (mgr != null) {
+                    invokeOneArg(mgr, "onHideAppsSwitchClick", boolean.class, Boolean.TRUE);
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "onHideAppsPasswordGuideClick failed: " + t.getMessage());
         }
     }
 
@@ -2682,7 +3564,7 @@ public final class PocoCompatHelper {
         openHideAppsPatternSetupIfUnset();
     }
 
-    private static void openHideAppsPatternSetupIfUnset() {
+    public static void openHideAppsPatternSetupIfUnset() {
         if (!hasHideAppsPassword()) {
             showHideAppsPlaceHolder(0, null);
         }
@@ -2751,6 +3633,10 @@ public final class PocoCompatHelper {
                                 if (controller == null) {
                                     invokeZeroArg(appsView, "createHideAppContainerView");
                                     controller = readField(appsView, "mHideAppsTransitionController");
+                                }
+                                Object hideContainer = readField(appsView, "mHideAppsContainerView");
+                                if (hideContainer instanceof View) {
+                                    ensureHideAppsListSynced((View) hideContainer);
                                 }
                                 if (controller != null) {
                                     invokeOneArg(controller, "showHideView", boolean.class, Boolean.TRUE);
@@ -3135,12 +4021,23 @@ public final class PocoCompatHelper {
     }
 
     private static boolean isPackageInstalled(Context ctx, String pkg) {
-        try {
-            ctx.getPackageManager().getPackageInfo(pkg, 0);
-            return true;
-        } catch (Throwable ignored) {
+        if (ctx == null || pkg == null || pkg.isEmpty()) {
             return false;
         }
+        Boolean cached = INSTALLED_PKG_CACHE.get(pkg);
+        if (cached != null) {
+            return cached;
+        }
+        boolean installed = false;
+        try {
+            ctx.getPackageManager().getPackageInfo(pkg, 0);
+            installed = true;
+        } catch (Throwable ignored) {
+        }
+        if (INSTALLED_PKG_CACHE.size() < 64) {
+            INSTALLED_PKG_CACHE.put(pkg, installed);
+        }
+        return installed;
     }
 
     private static boolean isPocoDefaultHome(Context ctx) {
@@ -3616,8 +4513,14 @@ public final class PocoCompatHelper {
     }
 
     public static int readTotalRamGb() {
+        int cached = sCachedTotalRamGb;
+        if (cached > 0) {
+            return cached;
+        }
         long bytes = readMemInfoBytes("MemTotal:", 4L * 1024L * 1024L * 1024L);
-        return Math.max(2, (int) Math.round(bytes / (1024.0 * 1024.0 * 1024.0)));
+        int gb = Math.max(2, (int) Math.round(bytes / (1024.0 * 1024.0 * 1024.0)));
+        sCachedTotalRamGb = gb;
+        return gb;
     }
 
     // ==================== Non-Xiaomi Default Home Screen & Dock ====================

@@ -162,13 +162,31 @@ val nonXiaomiCompatibilityPatch = patch(
 // ==================== 1. Manifest Fixes ====================
 
 private val DISABLED_BACKGROUND_COMPONENTS = setOf(
+    // Telemetry, ad pre-install, Firebase & DataTransport
     "com.google.firebase.sessions.SessionLifecycleService",
+    "com.google.firebase.components.ComponentDiscoveryService",
+    "com.google.android.datatransport.runtime.backends.TransportBackendDiscovery",
     "com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService",
     "com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver",
-    "com.xiaomi.dist.handoff.system.ServiceStartReceiver",
     "com.miui.home.launcher.AnalyticalDataCollectorJobService",
-    "com.miui.maml.elements.MusicListenerService",
     "com.miui.home.launcher.IronSource.IronSourcePreInstallReceiver",
+    "com.miui.bugreport.logprovider.DumpLogProvider",
+    // Xiaomi Handoff / Synergy / MiClaw / Cloud Backup / MAML / Recents (dead outside Xiaomi ROM)
+    "com.xiaomi.dist.handoff.system.ServiceStartReceiver",
+    "com.xiaomi.dist.handoff.system.PackageReceiver",
+    "com.miui.maml.elements.MusicListenerService",
+    "com.miui.home.recents.TouchInteractionService",
+    "com.miui.home.recents.AppHandleGestureProvider",
+    "com.miui.home.recents.WindowVisibilityProvider",
+    "com.miui.home.launcher.snapshot.HomeSnapshotHelperService",
+    "com.miui.home.isolate.provision.SetupWizardCompletedService",
+    "com.miui.home.miclaw.HomeSettingsToolService",
+    "com.miui.home.launcher.cloudbackup.BackupRestoreHomeService",
+    "com.miui.home.actionclient.AIActionProvider",
+    "com.miui.home.launcher.offlinewidget.OfflineWidgetReceiver",
+    "com.miui.home.launcher.offlinewidget.OfflineMamlReceiver",
+    "com.miui.home.launcher.WallpaperEffectFinishReceiver",
+    "com.miui.home.launcher.oldman.ElderlyManModeChangedReceiver",
 )
 
 private fun patchManifest() {
@@ -205,6 +223,9 @@ private fun patchManifest() {
         manifest.elements("provider").forEach { provider ->
             if (provider.attribute("android:readPermission") == "com.android.launcher.permission.READ_SETTINGS") {
                 provider.setAttribute("android:readPermission", OWN_WRITE_SETTINGS_PERMISSION)
+            }
+            if (provider.attribute("android:name") in DISABLED_BACKGROUND_COMPONENTS) {
+                provider.setAttribute("android:enabled", "false")
             }
         }
 
@@ -1825,14 +1846,171 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
         return v0
     """.trimIndent()
 
-    // 1. ApplicationsMessage.initSuperscriptCountObserver: eliminates MIUI-only
+    // 1. Thread-safe negative-caching ReflectUtils backend (417 call sites across 110 files!).
+    //    Stock ReflectUtils uses unsynchronized HashMaps and NEVER negative-caches missing MIUI
+    //    classes/methods/fields (and callObjectMethod/callObjectMethod2/getObjectField aren't
+    //    cached at all), throwing + logging full stack traces on every UI/blur/animation frame.
+    val reflectUtils = mutableClassDefBy("Lcom/miui/launcher/utils/ReflectUtils;")
+    reflectUtils.findMethodOrThrow("getClass", listOf("Ljava/lang/String;"), "Ljava/lang/Class;").replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0 }, $COMPAT_HELPER->reflectGetClass(Ljava/lang/String;)Ljava/lang/Class;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "hasMethod",
+        listOf("Ljava/lang/Class;", "Ljava/lang/String;", "[Ljava/lang/Class;"),
+        "Z",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2 }, $COMPAT_HELPER->reflectHasMethod(Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;)Z
+            move-result v0
+            return v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "getMethod",
+        listOf("Ljava/lang/Class;", "Ljava/lang/String;", "Ljava/lang/String;", "[Ljava/lang/Class;"),
+        "Ljava/lang/reflect/Method;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3 }, $COMPAT_HELPER->reflectGetMethod(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "getDeclaredMethod",
+        listOf("Ljava/lang/Class;", "Ljava/lang/String;", "Ljava/lang/String;", "[Ljava/lang/Class;"),
+        "Ljava/lang/reflect/Method;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3 }, $COMPAT_HELPER->reflectGetDeclaredMethod(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "getField",
+        listOf("Ljava/lang/Class;", "Ljava/lang/String;", "Ljava/lang/String;"),
+        "Ljava/lang/reflect/Field;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2 }, $COMPAT_HELPER->reflectGetField(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/reflect/Field;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "getObjectField",
+        listOf("Ljava/lang/Object;", "Ljava/lang/String;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1 }, $COMPAT_HELPER->reflectGetObjectField(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "callObjectMethod",
+        listOf("Ljava/lang/Object;", "Ljava/lang/Class;", "Ljava/lang/String;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3, p4 }, $COMPAT_HELPER->reflectCallObjectMethod(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "callObjectMethod2",
+        listOf("Ljava/lang/Object;", "Ljava/lang/Class;", "Ljava/lang/String;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3, p4 }, $COMPAT_HELPER->reflectCallObjectMethod2(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "callStaticMethod",
+        listOf("Ljava/lang/String;", "Ljava/lang/Class;", "Ljava/lang/String;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2, p3, p4 }, $COMPAT_HELPER->reflectCallStaticMethod(Ljava/lang/String;Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "createNewInstance",
+        listOf("Ljava/lang/Class;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { p0, p1, p2 }, $COMPAT_HELPER->reflectCreateNewInstance(Ljava/lang/Class;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "invoke",
+        listOf("Ljava/lang/Class;", "Ljava/lang/Object;", "Ljava/lang/String;", "Ljava/lang/Class;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "V",
+    ).replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static/range { p0 .. p5 }, $COMPAT_HELPER->reflectInvoke(Ljava/lang/Class;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Class;[Ljava/lang/Class;[Ljava/lang/Object;)V
+            return-void
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "invokeObject",
+        listOf("Ljava/lang/Class;", "Ljava/lang/Object;", "Ljava/lang/String;", "Ljava/lang/Class;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static/range { p0 .. p5 }, $COMPAT_HELPER->reflectInvokeObject(Ljava/lang/Class;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Class;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    reflectUtils.findMethodOrThrow(
+        "invokeObject",
+        listOf("Ljava/lang/Class;", "Ljava/lang/Object;", "Ljava/lang/String;", "Ljava/lang/Class;", "Ljava/lang/Object;", "[Ljava/lang/Class;", "[Ljava/lang/Object;"),
+        "Ljava/lang/Object;",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static/range { p0 .. p6 }, $COMPAT_HELPER->reflectInvokeObjectDefault(Ljava/lang/Class;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Class;Ljava/lang/Object;[Ljava/lang/Class;[Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+
+    // 2. ApplicationsMessage.initSuperscriptCountObserver: eliminates MIUI-only
     //    ScriptCountObserver -> write-back -> observer notification feedback storm.
     val appMsg = mutableClassDefBy("Lcom/miui/home/launcher/ApplicationsMessage;")
     appMsg.findMethodOrThrow("initSuperscriptCountObserver", emptyList(), "V")
         .replaceBody(locals = 0, smali = "return-void")
 
-    // 2. Disable Firebase Analytics/RemoteConfig, AppFinder remote sync, and MIUI MSA ad SDK
-    //    (eliminates periodic network wakeups, Crashlytics/Sessions services, and battery drain).
+    // 3. Disable Firebase Analytics/RemoteConfig, AppFinder remote sync, OneTrack, MSA ad SDK,
+    //    MIUI bugreport disk logging (284 log), and PreviewDisappear icon-load log spam.
     val firebaseMgr = mutableClassDefBy("Lcom/mi/appfinder/launcher/firebase/FirebaseManager;")
     firebaseMgr.findMethodOrThrow("initFirebase", emptyList(), "V")
         .replaceBody(locals = 0, smali = "return-void")
@@ -1840,12 +2018,34 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
     val finderCtrl = mutableClassDefBy("Lcom/mi/appfinder/launcher/FinderController;")
     finderCtrl.findMethodOrThrow("syncFinderRemoteConfig", listOf("Z"), "Z")
         .replaceBody(locals = 1, smali = returnTrueSmali)
+    finderCtrl.findMethodOrThrow("onLauncherAsyncStart", listOf("Z"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val oneTrack = mutableClassDefBy("Lcom/miui/home/common/utils/OneTrackInterfaceUtils;")
+    oneTrack.findMethodOrThrow("init", listOf("Landroid/content/Context;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
 
     val msaSdk = mutableClassDefBy("Lcom/miui/msa/MSASdk;")
     msaSdk.findMethodOrThrow("init", listOf("Landroid/content/Context;"), "V")
         .replaceBody(locals = 0, smali = "return-void")
 
-    // 3. Neutralize MIUI-only CPU/thread-priority boosters & MAML background thread pause hooks
+    val log284 = mutableClassDefBy("Lcom/miui/home/library/MiuiHomeLog284Helper;")
+    log284.findMethodOrThrow(
+        "asyncFileLoggerLevelDebug",
+        listOf("Landroid/content/Context;", "Ljava/lang/String;", "Ljava/lang/String;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+    log284.findMethodOrThrow(
+        "fileLoggerLevelFatal",
+        listOf("Landroid/content/Context;", "Ljava/lang/String;", "Ljava/lang/String;", "Ljava/lang/String;", "Ljava/lang/Exception;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+
+    val tempLog = mutableClassDefBy("Lcom/miui/home/common/utils/TempLog;")
+    tempLog.findMethodOrThrow("w", listOf("Ljava/lang/String;", "Ljava/lang/String;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    // 4. Neutralize MIUI-only CPU/thread-priority boosters & MAML background thread pause hooks
     //    (all fail non-root or spam failed reflection/binder calls on every swipe and touch).
     val folme = mutableClassDefBy("Lmiuix/animation/Folme;")
     folme.findMethodOrThrow("setThreadPriority", listOf("I"), "V")
@@ -1854,6 +2054,15 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
     val cpuBooster = mutableClassDefBy("Lcom/miui/home/library/utils/CPUBooster;")
     cpuBooster.findMethodOrThrow("boostCpuToMax", listOf("I"), "V")
         .replaceBody(locals = 0, smali = "return-void")
+    cpuBooster.findMethodOrThrow("cancelCpuBoost", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    cpuBooster.findMethodOrThrow("boostTouch", listOf("Landroid/view/MotionEvent;", "I"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    cpuBooster.findMethodOrThrow(
+        "boostThreadLevel",
+        listOf("[I", "I", "Lcom/miui/home/library/utils/CPUBooster\$ThreadLevel;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
 
     val boostHelper = mutableClassDefBy("Lcom/miui/launcher/utils/BoostHelper;")
     boostHelper.findMethodOrThrow(
@@ -1861,18 +2070,147 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
         listOf("Landroid/content/Context;"),
         "V",
     ).replaceBody(locals = 0, smali = "return-void")
+    boostHelper.findMethodOrThrow("boost", listOf("Landroid/view/View;", "Z"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    boostHelper.findMethodOrThrow("bindCore", listOf("Landroid/view/View;", "J"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
 
     val deviceConfig = mutableClassDefBy("Lcom/miui/home/launcher/DeviceConfig;")
     deviceConfig.findMethodOrThrow("setContextPriorityHigh", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    deviceConfig.findMethodOrThrow("checkSystemUIFsgVersion", emptyList(), "V")
         .replaceBody(locals = 0, smali = "return-void")
 
     val mamlUtils = mutableClassDefBy("Lcom/miui/launcher/utils/MamlUtils;")
     mamlUtils.findMethodOrThrow("setGlobalThreadPause", listOf("Z"), "V")
         .replaceBody(locals = 0, smali = "return-void")
 
-    // 4. Neutralize MIUI Quickstep full-screen gesture (FSG) overlay polling & logcat spam
-    //    (eliminates mFsGestureStatusRefreshRunnable loops, Recents FSG Settings writebacks,
-    //    and privileged ActivityObserver / Keyguard / AnalyticalDataCollector background work).
+    // 5. Eliminate dead MIUI Quickstep / Recents / Synergy threads & Binder listeners
+    //    (saves 4-6 permanently-resident threads: FsGestureSecondaryThread, FsGesturePriorityThread,
+    //    Recents-TaskResourceLoader, TaskSnapshotDeamon, BadgeDecoupling, Synergy CachedThreadPool).
+    val touchInteraction = mutableClassDefBy("Lcom/miui/home/recents/TouchInteractionService;")
+    touchInteraction.findMethodOrThrow("getGestureSecondaryLooper", emptyList(), "Landroid/os/Looper;").replaceBody(
+        locals = 1,
+        smali = """
+            invoke-static { }, Lcom/miui/home/common/multithread/BackgroundThread;->getHandler()Landroid/os/Handler;
+            move-result-object v0
+            invoke-virtual { v0 }, Landroid/os/Handler;->getLooper()Landroid/os/Looper;
+            move-result-object v0
+            return-object v0
+        """.trimIndent(),
+    )
+    val recentGestUtils = mutableClassDefBy("Lcom/miui/home/common/utils/CommonRecentAndGestUtils;")
+    recentGestUtils.findMethodOrThrow("isUseGesturePriorityThread", emptyList(), "Z")
+        .replaceBody(locals = 1, smali = returnFalseSmali)
+
+    val bgTaskLoader = mutableClassDefBy("Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;")
+    bgTaskLoader.findMethodOrThrow(
+        "<init>",
+        listOf(
+            "Lcom/android/systemui/shared/recents/model/TaskResourceLoadQueue;",
+            "Lcom/android/systemui/shared/recents/model/IconLoader;",
+            "Lcom/android/systemui/shared/recents/model/TaskKeyLruCache;",
+            "Lcom/android/systemui/shared/recents/model/TaskKeyLruCache;",
+            "Landroid/graphics/Bitmap;",
+            "I",
+        ),
+        "V",
+    ).replaceBody(
+        locals = 2,
+        smali = """
+            invoke-direct { p0 }, Ljava/lang/Object;-><init>()V
+            new-instance v0, Landroid/os/Handler;
+            invoke-static { }, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;
+            move-result-object v1
+            invoke-direct { v0, v1 }, Landroid/os/Handler;-><init>(Landroid/os/Looper;)V
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mMainThreadHandler:Landroid/os/Handler;
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mLoadThreadHandler:Landroid/os/Handler;
+            iput-object p1, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mLoadQueue:Lcom/android/systemui/shared/recents/model/TaskResourceLoadQueue;
+            iput-object p2, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mIconLoader:Lcom/android/systemui/shared/recents/model/IconLoader;
+            iput-object p3, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mThumbnailCache:Lcom/android/systemui/shared/recents/model/TaskKeyLruCache;
+            iput-object p4, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mWaitingBlurThumbnailDatas:Lcom/android/systemui/shared/recents/model/TaskKeyLruCache;
+            iput-object p5, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mDefaultThumbnail:Landroid/graphics/Bitmap;
+            iput p6, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mSvelteLevel:I
+            new-instance v0, Landroid/os/HandlerThread;
+            const-string v1, "Recents-TaskResourceLoader"
+            invoke-direct { v0, v1 }, Landroid/os/HandlerThread;-><init>(Ljava/lang/String;)V
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/model/BackgroundTaskLoader;->mLoadThread:Landroid/os/HandlerThread;
+            return-void
+        """.trimIndent(),
+    )
+    bgTaskLoader.findMethodOrThrow("start", listOf("Landroid/content/Context;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    bgTaskLoader.findMethodOrThrow("stop", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    bgTaskLoader.findMethodOrThrow("run", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val taskStackListeners = mutableClassDefBy("Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners;")
+    taskStackListeners.findMethodOrThrow("<init>", listOf("Landroid/os/Looper;"), "V").replaceBody(
+        locals = 1,
+        smali = """
+            invoke-direct { p0 }, Landroid/app/TaskStackListener;-><init>()V
+            new-instance v0, Ljava/util/ArrayList;
+            invoke-direct { v0 }, Ljava/util/ArrayList;-><init>()V
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners;->mTaskStackListeners:Ljava/util/List;
+            new-instance v0, Ljava/util/ArrayList;
+            invoke-direct { v0 }, Ljava/util/ArrayList;-><init>()V
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners;->mTmpListenersList:Ljava/util/List;
+            new-instance v0, Landroid/os/Handler;
+            invoke-direct { v0, p1 }, Landroid/os/Handler;-><init>(Landroid/os/Looper;)V
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners;->backgroundHandler:Landroid/os/Handler;
+            new-instance v0, Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners${'$'}H;
+            invoke-direct { v0, p0, p1 }, Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners${'$'}H;-><init>(Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners;Landroid/os/Looper;)V
+            iput-object v0, p0, Lcom/android/systemui/shared/recents/system/TaskStackChangeListeners;->mHandler:Landroid/os/Handler;
+            return-void
+        """.trimIndent(),
+    )
+    taskStackListeners.findMethodOrThrow(
+        "registerTaskStackListener",
+        listOf("Lcom/android/systemui/shared/recents/system/TaskStackChangeListener;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+    taskStackListeners.findMethodOrThrow(
+        "unregisterTaskStackListener",
+        listOf("Lcom/android/systemui/shared/recents/system/TaskStackChangeListener;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+
+    val synergySdk = mutableClassDefBy("Lcom/xiaomi/mirror/synergy/MiuiSynergySdk;")
+    synergySdk.findMethodOrThrow(
+        "addRemoteDeviceListener",
+        listOf("Landroid/content/Context;", "Lcom/xiaomi/mirror/synergy/MiuiSynergySdk\$IRemoteDeviceListener;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+
+    val thumbBlurMgr = mutableClassDefBy("Lcom/miui/home/recents/ThumbnailBlurManager;")
+    thumbBlurMgr.findMethodOrThrow(
+        "<init>",
+        listOf("Landroid/content/Context;", "Landroid/os/Handler;"),
+        "V",
+    ).replaceBody(
+        locals = 0,
+        smali = """
+            invoke-direct { p0 }, Ljava/lang/Object;-><init>()V
+            iput-object p1, p0, Lcom/miui/home/recents/ThumbnailBlurManager;->mContext:Landroid/content/Context;
+            iput-object p2, p0, Lcom/miui/home/recents/ThumbnailBlurManager;->mHandler:Landroid/os/Handler;
+            return-void
+        """.trimIndent(),
+    )
+
+    val taskSnapshotVS = mutableClassDefBy("Lcom/android/systemui/shared/recents/system/TaskSnapshotCompatVS;")
+    taskSnapshotVS.findMethodOrThrow("startCache", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    taskSnapshotVS.findMethodOrThrow("stopCache", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val appObserver = mutableClassDefBy("Lcom/android/systemui/shared/recents/AppObserver;")
+    appObserver.findMethodOrThrow(
+        "addForegroundInfoListener",
+        listOf("Lcom/android/systemui/shared/recents/AppObserver\$ForegroundListener;"),
+        "V",
+    ).replaceBody(locals = 0, smali = "return-void")
+
     val baseRecents = mutableClassDefBy("Lcom/miui/home/recents/BaseRecentsImpl;")
     baseRecents.findMethodOrThrow("addFsgGestureWindow", emptyList(), "V")
         .replaceBody(locals = 0, smali = "return-void")
@@ -1885,9 +2223,19 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
     ).replaceBody(locals = 0, smali = "return-void")
     baseRecents.findMethodOrThrow("readCloudDataForFsg", emptyList(), "V")
         .replaceBody(locals = 0, smali = "return-void")
-
-    val baseLauncher = mutableClassDefBy("Lcom/miui/home/launcher/BaseLauncher;")
-    baseLauncher.findMethodOrThrow("notifyBackGestureStatus", emptyList(), "V")
+    baseRecents.findMethodOrThrow("registerCloudDataObserver", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseRecents.findMethodOrThrow("registerScreeningModeObserver", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseRecents.findMethodOrThrow("registerThreeGestureObserver", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseRecents.findMethodOrThrow("registerVTCameraReceiver", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseRecents.findMethodOrThrow("registerSuperSavePowerObserver", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseRecents.findMethodOrThrow("registerRecentsLayoutStyleObserver", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseRecents.findMethodOrThrow("initSFDeviceGestureHelper", emptyList(), "V")
         .replaceBody(locals = 0, smali = "return-void")
 
     val actObserver = mutableClassDefBy("Lcom/miui/home/recents/ActivityObserverLauncherImpl;")
@@ -1901,6 +2249,120 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
     val analyticalJob = mutableClassDefBy("Lcom/miui/home/launcher/AnalyticalDataCollectorJobService;")
     analyticalJob.findMethodOrThrow("onStartJob", listOf("Landroid/app/job/JobParameters;"), "Z")
         .replaceBody(locals = 1, smali = returnFalseSmali)
+
+    // 6. Eliminate per-resume / per-swipe / per-stop Xiaomi cloud, GetApps, ServiceDelivery,
+    //    SecurityCenter, PowerKeeper, and empty-list UsageStats churn.
+    val baseLauncher = mutableClassDefBy("Lcom/miui/home/launcher/BaseLauncher;")
+    baseLauncher.findMethodOrThrow("notifyBackGestureStatus", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    baseLauncher.findMethodOrThrow("requestPowerKeeperPermissionIfNeed", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val checkNewInstalled = baseLauncher.findMethodOrThrow("checkNewInstalledAppsBeStarted", emptyList(), "V")
+    val firstCheckNewInsn = checkNewInstalled.instructions.first()
+    checkNewInstalled.addInstructionsWithLabels(
+        0,
+        """
+            iget-object v0, p0, Lcom/miui/home/launcher/BaseLauncher;->mNewInstalledApps:Ljava/util/ArrayList;
+            if-eqz v0, :skip_new_installed
+            invoke-virtual { v0 }, Ljava/util/ArrayList;->isEmpty()Z
+            move-result v0
+            if-eqz v0, :continue_new_installed
+            :skip_new_installed
+            return-void
+        """.trimIndent(),
+        ExternalLabel("continue_new_installed", firstCheckNewInsn),
+    )
+
+    val marketMonitor = mutableClassDefBy("Lcom/miui/home/launcher/operationicon/MarketCustomizeIconVisibleMonitor;")
+    marketMonitor.findMethodOrThrow("onLauncherResume", listOf("Lcom/miui/home/launcher/BaseLauncher;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    marketMonitor.findMethodOrThrow("onWorkspaceScreenChanged", listOf("Lcom/miui/home/launcher/BaseLauncher;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    marketMonitor.findMethodOrThrow("onOverlayChanged", listOf("Lcom/miui/home/launcher/BaseLauncher;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val marketMgr = mutableClassDefBy("Lcom/miui/home/launcher/operationicon/MarketCustomizeIconManager;")
+    marketMgr.findMethodOrThrow("onLauncherResume", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val badgeDecoupling = mutableClassDefBy("Lcom/miui/home/launcher/badge/BadgeDecouplingConfig;")
+    badgeDecoupling.findMethodOrThrow("initCloudControl", listOf("Landroid/content/Context;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    badgeDecoupling.findMethodOrThrow("ensureLoadedForProvider", listOf("Landroid/content/Context;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val uninstallReminder = mutableClassDefBy("Lcom/miui/home/launcher/uninstall/UninstallReminderCloudControlHelper;")
+    uninstallReminder.findMethodOrThrow("onLauncherActivityCreate", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val sdReplace = mutableClassDefBy("Lcom/miui/home/launcher/servicedeliver/ServiceDeliveryReplaceHelper;")
+    sdReplace.findMethodOrThrow("sendWeatherCallbacks", listOf("Landroid/os/Handler;", "I"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    sdReplace.findMethodOrThrow("tryReplaceToServiceDelivery", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val sdDelegate = mutableClassDefBy("Lcom/miui/home/launcher/LauncherServiceDeliveryWidgetDelegate;")
+    sdDelegate.findMethodOrThrow("initWidgetHost", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val intlContentCenter = mutableClassDefBy("Lcom/miui/home/launcher/InternationalContentCenter;")
+    intlContentCenter.findMethodOrThrow("init", emptyList(), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val securityHide = mutableClassDefBy("Lcom/miui/home/isolate/security/SecurityHide;")
+    securityHide.findMethodOrThrow("getSecurityHideItemsAsync", listOf("Landroid/content/Context;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+    securityHide.findMethodOrThrow("getSecurityHideItems", listOf("Landroid/content/Context;"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    val appPredict = mutableClassDefBy("Lcom/miui/home/folder/apppredict/AppPredictHelper;")
+    appPredict.findMethodOrThrow("getAppPredictFromService", listOf("Z"), "V")
+        .replaceBody(locals = 0, smali = "return-void")
+
+    // 7. Skip dead Minus-1 & International Search overlay LauncherClient connections when
+    //    Xiaomi App Vault / AppFinder are absent (stops bindService loops on every lifecycle event).
+    val assistantGoogle = mutableClassDefBy("Lcom/miui/home/launcher/LauncherAssistantCompatGoogle;")
+    val createGoogleClient = assistantGoogle.findMethodOrThrow(
+        "createLauncherClient",
+        listOf("Lcom/miui/home/launcher/allapps/LauncherMode;"),
+        "V",
+    )
+    val firstGoogleClientInsn = createGoogleClient.instructions.first()
+    createGoogleClient.addInstructionsWithLabels(
+        0,
+        """
+            iget-object v0, p0, Lcom/miui/home/launcher/LauncherAssistantCompat;->mLauncher:Lcom/miui/home/launcher/BaseLauncher;
+            iget-object v1, p0, Lcom/miui/home/launcher/LauncherAssistantCompat;->mPackageName:Ljava/lang/String;
+            invoke-static { v0, v1 }, $COMPAT_HELPER->shouldCreateMinusScreenClient(Landroid/content/Context;Ljava/lang/String;)Z
+            move-result v0
+            if-nez v0, :continue_minus_client
+            return-void
+        """.trimIndent(),
+        ExternalLabel("continue_minus_client", firstGoogleClientInsn),
+    )
+
+    val intlSearchCb = mutableClassDefBy(
+        "Lcom/miui/home/launcher/overlay/internationalsearch/InternationalSearchLauncherCallbacks;",
+    )
+    val createFinderClient = intlSearchCb.findMethodOrThrow(
+        "createLauncherClient",
+        listOf("Landroid/os/Bundle;", "Lcom/miui/home/launcher/allapps/LauncherMode;"),
+        "Lcom/miui/launcher/overlay/client/LauncherClient;",
+    )
+    val firstFinderClientInsn = createFinderClient.instructions.first()
+    createFinderClient.addInstructionsWithLabels(
+        0,
+        """
+            iget-object v0, p0, Lcom/miui/home/launcher/overlay/OverlayLauncherCallbacks;->mLauncher:Lcom/miui/home/launcher/BaseLauncher;
+            invoke-static { v0 }, $COMPAT_HELPER->shouldCreateAppFinderClient(Landroid/content/Context;)Z
+            move-result v0
+            if-nez v0, :continue_finder_client
+            const/4 v0, 0x0
+            return-object v0
+        """.trimIndent(),
+        ExternalLabel("continue_finder_client", firstFinderClientInsn),
+    )
 }
 
 // ==================== 7. Native Non-Xiaomi UX (Widgets, Uninstall, Wallpaper) ====================
@@ -2606,8 +3068,9 @@ private fun patchHideAppsFeature() {
         """.trimIndent(),
     )
 
-    // 6. HideAppDialogManager.createFingerprintVerityDialog: show a single clean native
-    //    BiometricPrompt instead of stacking a legacy MIUI fingerprint dialog underneath it.
+    // 6. HideAppDialogManager: show a single clean native BiometricPrompt instead of stacking
+    //    a legacy MIUI dialog, and open pattern setup immediately when user cancels the
+    //    fingerprint guide dialog (instead of requiring 10 cancels).
     val hideDialogMgr = mutableClassDefBy(
         "Lcom/miui/home/launcher/allapps/hideapps/HideAppDialogManager;",
     )
@@ -2618,9 +3081,28 @@ private fun patchHideAppsFeature() {
             return-void
         """.trimIndent(),
     )
+    val guideCancel = hideDialogMgr.findMethodOrThrow(
+        "lambda\$guideFingerprintDialog\$6",
+        listOf("Landroid/view/View;"),
+        "V",
+    )
+    val guideCancelReturns = guideCancel.instructions.withIndex()
+        .filter { it.value.opcode == Opcode.RETURN_VOID }
+        .map { it.index }
+        .asReversed()
+    check(guideCancelReturns.isNotEmpty()) {
+        "POCO Launcher: return-void não encontrado em HideAppDialogManager.lambda\$guideFingerprintDialog\$6"
+    }
+    for (retIdx in guideCancelReturns) {
+        guideCancel.addInstructionsAtControlFlowLabel(
+            retIdx,
+            "invoke-static { }, $COMPAT_HELPER->openHideAppsPatternSetupIfUnset()V",
+        )
+    }
 
     // 7. HideAppsUnlockContainerView: make the fingerprint icon re-open BiometricPrompt on tap,
-    //    and replace Xiaomi Account / email password reset with native device screen-lock auth.
+    //    apply Dark/Light UI colors immediately, and replace Xiaomi Account / email password
+    //    reset with native device screen-lock auth.
     val unlockView = mutableClassDefBy(
         "Lcom/miui/home/launcher/allapps/hideapps/HideAppsUnlockContainerView;",
     )
@@ -2645,6 +3127,94 @@ private fun patchHideAppsFeature() {
             return-void
         """.trimIndent(),
     )
+
+    // 8. HideAppsViewPlaceHolderSheet: fix guaranteed InflateException(NullPointerException) in
+    //    the 2-arg XML constructor (which called findViewById before children were inflated), and
+    //    bind hideAppsViewPlaceHolder safely on handleOpen/setInsets/handleClose.
+    val placeHolderSheet = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsViewPlaceHolderSheet;",
+    )
+    placeHolderSheet.findMethodOrThrow(
+        "<init>",
+        listOf("Landroid/content/Context;", "Landroid/util/AttributeSet;"),
+        "V",
+    ).replaceBody(
+        locals = 1,
+        smali = """
+            const/4 v0, 0x0
+            invoke-direct { p0, p1, p2, v0 }, Lcom/miui/home/launcher/allapps/hideapps/HideAppsViewPlaceHolderSheet;-><init>(Landroid/content/Context;Landroid/util/AttributeSet;I)V
+            return-void
+        """.trimIndent(),
+    )
+    val bindSheetSmali =
+        "invoke-static { p0 }, $COMPAT_HELPER->bindHideAppsPlaceHolderSheet(Landroid/view/View;)V"
+    placeHolderSheet.findMethodOrThrow("handleOpen", emptyList(), "V")
+        .addInstructions(0, bindSheetSmali)
+    placeHolderSheet.findMethodOrThrow("setInsets", listOf("Landroid/graphics/Rect;"), "V")
+        .addInstructions(0, bindSheetSmali)
+    placeHolderSheet.findMethodOrThrow("handleClose", listOf("Z"), "V")
+        .addInstructions(0, bindSheetSmali)
+
+    // 9. HideAppsViewPlaceHolder.hide(): fix stock bug where uncleared mEnterAnim caused hide()
+    //    to skip mExitAnim and mCurrentView.onExit(), so onPasswordSetSuccess() was NEVER invoked
+    //    and the user remained stuck on the "Set password" screen after confirming their pattern.
+    val placeHolder = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsViewPlaceHolder;",
+    )
+    placeHolder.findMethodOrThrow("hide", emptyList(), "V").replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { p0 }, $COMPAT_HELPER->closeHideAppsViewPlaceHolder(Landroid/view/View;)V
+            return-void
+        """.trimIndent(),
+    )
+
+    // 10. HideAppsSetPasswordContainerView.onFinishInflate(): fix invisible black-on-dark-gray
+    //     bottom action buttons & light pattern dots in Dark Mode.
+    val setPwdView = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsSetPasswordContainerView;",
+    )
+    val setPwdInflate = setPwdView.findMethodOrThrow("onFinishInflate", emptyList(), "V")
+    val setPwdReturns = setPwdInflate.instructions.withIndex()
+        .filter { it.value.opcode == Opcode.RETURN_VOID }
+        .map { it.index }
+        .asReversed()
+    check(setPwdReturns.isNotEmpty()) {
+        "POCO Launcher: return-void não encontrado em HideAppsSetPasswordContainerView.onFinishInflate"
+    }
+    for (retIdx in setPwdReturns) {
+        setPwdInflate.addInstructionsAtControlFlowLabel(
+            retIdx,
+            "invoke-static { p0 }, $COMPAT_HELPER->styleHideAppsSetPasswordButtons(Landroid/view/View;)V",
+        )
+    }
+
+    // 11. HideAppsPasswordGuideView & HideAppsContainerView: handle tapping "Set password" cleanly
+    //     if a pattern already exists, and ensure HideAppsSelectView/ContentView always sync apps
+    //     from AllAppsStore on first enable without needing a launcher restart.
+    val pwdGuideView = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsPasswordGuideView;",
+    )
+    pwdGuideView.findMethodOrThrow(
+        "lambda\$onFinishInflate\$0",
+        listOf("Landroid/view/View;"),
+        "V",
+    ).replaceBody(
+        locals = 0,
+        smali = """
+            invoke-static { p0 }, $COMPAT_HELPER->onHideAppsPasswordGuideClick(Landroid/view/View;)V
+            return-void
+        """.trimIndent(),
+    )
+
+    val hideContainerView = mutableClassDefBy(
+        "Lcom/miui/home/launcher/allapps/hideapps/HideAppsContainerView;",
+    )
+    hideContainerView.findMethodOrThrow("changeToContentContainerView", emptyList(), "V")
+        .addInstructions(
+            0,
+            "invoke-static { p0 }, $COMPAT_HELPER->ensureHideAppsListSynced(Landroid/view/View;)V",
+        )
 }
 
 private fun patchWallpaperIntegration() {

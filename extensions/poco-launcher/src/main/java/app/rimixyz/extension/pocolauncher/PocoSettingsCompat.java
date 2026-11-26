@@ -7,6 +7,7 @@ import android.database.ContentObserver;
 import android.net.Uri;
 import android.provider.Settings;
 
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -30,7 +31,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * not re-fire local {@link ContentObserver}s, preventing infinite observer feedback loops (such as
  * {@code ApplicationsMessage.ScriptCountObserver} writing {@code *.superscript_count="0"} inside
  * {@code onChange}). Absent non-OS (MIUI-only) keys are negative-cached in memory to eliminate
- * repeated Binder IPC to {@code SettingsProvider} on hot launcher paths.
+ * repeated Binder IPC to {@code SettingsProvider} on hot launcher paths. Local observers are stored
+ * via {@link WeakReference} so destroyed views/activities are never leaked.
  */
 @SuppressWarnings("unused")
 public final class PocoSettingsCompat {
@@ -91,7 +93,7 @@ public final class PocoSettingsCompat {
             "accessibility_display_daltonizer_enabled"
     )));
 
-    private static final Map<String, CopyOnWriteArrayList<ContentObserver>> LOCAL_OBSERVERS =
+    private static final Map<String, CopyOnWriteArrayList<WeakReference<ContentObserver>>> LOCAL_OBSERVERS =
             new ConcurrentHashMap<>();
 
     private PocoSettingsCompat() {
@@ -110,10 +112,19 @@ public final class PocoSettingsCompat {
             return;
         }
         String key = namespace + "/" + segments.get(1);
-        CopyOnWriteArrayList<ContentObserver> list = LOCAL_OBSERVERS.computeIfAbsent(
+        CopyOnWriteArrayList<WeakReference<ContentObserver>> list = LOCAL_OBSERVERS.computeIfAbsent(
                 key, k -> new CopyOnWriteArrayList<>());
-        if (!list.contains(observer)) {
-            list.add(observer);
+        boolean alreadyPresent = false;
+        for (WeakReference<ContentObserver> ref : list) {
+            ContentObserver existing = ref.get();
+            if (existing == null) {
+                list.remove(ref);
+            } else if (existing == observer) {
+                alreadyPresent = true;
+            }
+        }
+        if (!alreadyPresent) {
+            list.add(new WeakReference<>(observer));
         }
     }
 
@@ -121,8 +132,34 @@ public final class PocoSettingsCompat {
         if (observer == null || LOCAL_OBSERVERS.isEmpty()) {
             return;
         }
-        for (CopyOnWriteArrayList<ContentObserver> list : LOCAL_OBSERVERS.values()) {
-            list.remove(observer);
+        for (Map.Entry<String, CopyOnWriteArrayList<WeakReference<ContentObserver>>> entry : LOCAL_OBSERVERS.entrySet()) {
+            CopyOnWriteArrayList<WeakReference<ContentObserver>> list = entry.getValue();
+            for (WeakReference<ContentObserver> ref : list) {
+                ContentObserver existing = ref.get();
+                if (existing == null || existing == observer) {
+                    list.remove(ref);
+                }
+            }
+            if (list.isEmpty()) {
+                LOCAL_OBSERVERS.remove(entry.getKey(), list);
+            }
+        }
+    }
+
+    static void pruneDeadObservers() {
+        if (LOCAL_OBSERVERS.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, CopyOnWriteArrayList<WeakReference<ContentObserver>>> entry : LOCAL_OBSERVERS.entrySet()) {
+            CopyOnWriteArrayList<WeakReference<ContentObserver>> list = entry.getValue();
+            for (WeakReference<ContentObserver> ref : list) {
+                if (ref.get() == null) {
+                    list.remove(ref);
+                }
+            }
+            if (list.isEmpty()) {
+                LOCAL_OBSERVERS.remove(entry.getKey(), list);
+            }
         }
     }
 
@@ -130,16 +167,25 @@ public final class PocoSettingsCompat {
         if (name == null || LOCAL_OBSERVERS.isEmpty()) {
             return;
         }
-        CopyOnWriteArrayList<ContentObserver> list = LOCAL_OBSERVERS.get(namespace + "/" + name);
+        String key = namespace + "/" + name;
+        CopyOnWriteArrayList<WeakReference<ContentObserver>> list = LOCAL_OBSERVERS.get(key);
         if (list == null || list.isEmpty()) {
             return;
         }
         Uri uri = Uri.withAppendedPath(Uri.parse("content://settings/" + namespace), name);
-        for (ContentObserver observer : list) {
+        for (WeakReference<ContentObserver> ref : list) {
+            ContentObserver observer = ref.get();
+            if (observer == null) {
+                list.remove(ref);
+                continue;
+            }
             try {
                 observer.dispatchChange(false, uri);
             } catch (Throwable ignored) {
             }
+        }
+        if (list.isEmpty()) {
+            LOCAL_OBSERVERS.remove(key, list);
         }
     }
 
@@ -246,24 +292,21 @@ public final class PocoSettingsCompat {
         }
     }
 
-    private static boolean hasLocal(String namespace, String name) {
-        if (name == null) {
-            return false;
-        }
-        ensureLoaded(namespace);
-        return memMap(namespace).containsKey(name);
-    }
-
-    private static String readLocal(String namespace, String name) {
+    /**
+     * Single-lookup read from local persisted overrides. Returns {@code null} when not locally
+     * overridden, {@link #NULL_SENTINEL} when explicitly overridden to {@code null}, or the stored
+     * string value otherwise.
+     */
+    private static String lookupLocalRaw(String namespace, String name) {
         if (name == null) {
             return null;
         }
         ensureLoaded(namespace);
-        String val = memMap(namespace).get(name);
-        if (val != null) {
-            return NULL_SENTINEL.equals(val) ? null : val;
-        }
-        return null;
+        return memMap(namespace).get(name);
+    }
+
+    private static String decodeLocal(String raw) {
+        return NULL_SENTINEL.equals(raw) ? null : raw;
     }
 
     /**
@@ -326,8 +369,9 @@ public final class PocoSettingsCompat {
     }
 
     public static String systemGetString(ContentResolver cr, String name) {
-        if (hasLocal("system", name)) {
-            return readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            return decodeLocal(raw);
         }
         if (cr == null || name == null || isKnownAbsent("system", name)) {
             return null;
@@ -344,8 +388,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int systemGetInt(ContentResolver cr, String name, int def) {
-        if (hasLocal("system", name)) {
-            String v = readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Integer.parseInt(v);
@@ -369,8 +414,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int systemGetInt(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("system", name)) {
-            String v = readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Integer.parseInt(v);
@@ -391,8 +437,9 @@ public final class PocoSettingsCompat {
     }
 
     public static long systemGetLong(ContentResolver cr, String name, long def) {
-        if (hasLocal("system", name)) {
-            String v = readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Long.parseLong(v);
@@ -416,8 +463,9 @@ public final class PocoSettingsCompat {
     }
 
     public static long systemGetLong(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("system", name)) {
-            String v = readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Long.parseLong(v);
@@ -438,8 +486,9 @@ public final class PocoSettingsCompat {
     }
 
     public static float systemGetFloat(ContentResolver cr, String name, float def) {
-        if (hasLocal("system", name)) {
-            String v = readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Float.parseFloat(v);
@@ -463,8 +512,9 @@ public final class PocoSettingsCompat {
     }
 
     public static float systemGetFloat(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("system", name)) {
-            String v = readLocal("system", name);
+        String raw = lookupLocalRaw("system", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Float.parseFloat(v);
@@ -506,8 +556,9 @@ public final class PocoSettingsCompat {
     }
 
     public static String globalGetString(ContentResolver cr, String name) {
-        if (hasLocal("global", name)) {
-            return readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            return decodeLocal(raw);
         }
         if (cr == null || name == null || isKnownAbsent("global", name)) {
             return null;
@@ -524,8 +575,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int globalGetInt(ContentResolver cr, String name, int def) {
-        if (hasLocal("global", name)) {
-            String v = readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Integer.parseInt(v);
@@ -549,8 +601,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int globalGetInt(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("global", name)) {
-            String v = readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Integer.parseInt(v);
@@ -571,8 +624,9 @@ public final class PocoSettingsCompat {
     }
 
     public static long globalGetLong(ContentResolver cr, String name, long def) {
-        if (hasLocal("global", name)) {
-            String v = readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Long.parseLong(v);
@@ -596,8 +650,9 @@ public final class PocoSettingsCompat {
     }
 
     public static long globalGetLong(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("global", name)) {
-            String v = readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Long.parseLong(v);
@@ -618,8 +673,9 @@ public final class PocoSettingsCompat {
     }
 
     public static float globalGetFloat(ContentResolver cr, String name, float def) {
-        if (hasLocal("global", name)) {
-            String v = readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Float.parseFloat(v);
@@ -643,8 +699,9 @@ public final class PocoSettingsCompat {
     }
 
     public static float globalGetFloat(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("global", name)) {
-            String v = readLocal("global", name);
+        String raw = lookupLocalRaw("global", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Float.parseFloat(v);
@@ -686,8 +743,9 @@ public final class PocoSettingsCompat {
     }
 
     public static String secureGetString(ContentResolver cr, String name) {
-        if (hasLocal("secure", name)) {
-            return readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            return decodeLocal(raw);
         }
         if (cr == null || name == null || isKnownAbsent("secure", name)) {
             return null;
@@ -704,8 +762,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int secureGetInt(ContentResolver cr, String name, int def) {
-        if (hasLocal("secure", name)) {
-            String v = readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Integer.parseInt(v);
@@ -729,8 +788,9 @@ public final class PocoSettingsCompat {
     }
 
     public static int secureGetInt(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("secure", name)) {
-            String v = readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Integer.parseInt(v);
@@ -755,8 +815,9 @@ public final class PocoSettingsCompat {
     }
 
     public static long secureGetLong(ContentResolver cr, String name, long def) {
-        if (hasLocal("secure", name)) {
-            String v = readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Long.parseLong(v);
@@ -780,8 +841,9 @@ public final class PocoSettingsCompat {
     }
 
     public static long secureGetLong(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("secure", name)) {
-            String v = readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Long.parseLong(v);
@@ -802,8 +864,9 @@ public final class PocoSettingsCompat {
     }
 
     public static float secureGetFloat(ContentResolver cr, String name, float def) {
-        if (hasLocal("secure", name)) {
-            String v = readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Float.parseFloat(v);
@@ -827,8 +890,9 @@ public final class PocoSettingsCompat {
     }
 
     public static float secureGetFloat(ContentResolver cr, String name) throws Settings.SettingNotFoundException {
-        if (hasLocal("secure", name)) {
-            String v = readLocal("secure", name);
+        String raw = lookupLocalRaw("secure", name);
+        if (raw != null) {
+            String v = decodeLocal(raw);
             if (v != null) {
                 try {
                     return Float.parseFloat(v);
