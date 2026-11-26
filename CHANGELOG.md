@@ -1,3 +1,9 @@
+## [1.9.0-dev.1](https://github.com/rimixyz/morphe-patches/compare/v1.8.0...v1.9.0-dev.1) (2026-11-26)
+
+### ✨ New Features
+
+* add POCO Launcher non-Xiaomi compatibility patch ([a8d0744](https://github.com/rimixyz/morphe-patches/commit/a8d07449eb07257e2cddba5374ea003893137b8f))
+
 ## [1.8.0](https://github.com/rimixyz/morphe-patches/compare/v1.7.0...v1.8.0) (2026-11-25)
 
 ### ✨ New Features
