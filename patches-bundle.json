@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-26T09:45:09",
-  "description": "## [1.9.0-dev.2](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.1...v1.9.0-dev.2) (2026-11-26)\n\n### 🐛 Bug Fixes\n\n* **POCO Launcher:** fix Hide Apps password setup flow and deeply optimize CPU, RAM, and battery ([151d522](https://github.com/rimixyz/morphe-patches/commit/151d522ef93482b9e51e93ecfc712759922b325f))",
-  "download_url": "https://github.com/rimixyz/morphe-patches/releases/download/v1.9.0-dev.2/patches-1.9.0-dev.2.mpp",
+  "created_at": "2026-11-26T10:29:20",
+  "description": "## [1.9.0-dev.3](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.2...v1.9.0-dev.3) (2026-11-26)\n\n### 🐛 Bug Fixes\n\n* **poco-launcher:** fix Hide Apps add-app crash, optimize CPU/RAM/battery, and unlock hidden HyperOS 3 features ([9a5dc31](https://github.com/rimixyz/morphe-patches/commit/9a5dc31e5fea78719f01245fab31904c360ebcb3))",
+  "download_url": "https://github.com/rimixyz/morphe-patches/releases/download/v1.9.0-dev.3/patches-1.9.0-dev.3.mpp",
   "signature_download_url": "",
-  "version": "1.9.0-dev.2"
+  "version": "1.9.0-dev.3"
 }

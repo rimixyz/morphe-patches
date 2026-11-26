@@ -1,3 +1,9 @@
+## [1.9.0-dev.3](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.2...v1.9.0-dev.3) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **poco-launcher:** fix Hide Apps add-app crash, optimize CPU/RAM/battery, and unlock hidden HyperOS 3 features ([9a5dc31](https://github.com/rimixyz/morphe-patches/commit/9a5dc31e5fea78719f01245fab31904c360ebcb3))
+
 ## [1.9.0-dev.2](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.1...v1.9.0-dev.2) (2026-11-26)
 
 ### 🐛 Bug Fixes
