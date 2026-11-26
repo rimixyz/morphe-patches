@@ -2550,7 +2550,7 @@ private fun patchCpuBatteryAndBackgroundOverhead() {
     regAssistantObs.addInstructionsWithLabels(
         0,
         """
-            iget-object v0, p0, Lcom/miui/home/launcher/overlay/OverlayLauncherCallbacks;->mLauncher:Lcom/miui/home/launcher/BaseLauncher;
+            iget-object v0, p0, Lcom/miui/home/launcher/overlay/assistant/AssistantLauncherCallbacks;->mLauncher:Lcom/miui/home/launcher/BaseLauncher;
             const/4 v1, 0x0
             invoke-static { v0, v1 }, $COMPAT_HELPER->shouldCreateMinusScreenClient(Landroid/content/Context;Ljava/lang/String;)Z
             move-result v0
