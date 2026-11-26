@@ -1,3 +1,9 @@
+## [1.9.0-dev.5](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.4...v1.9.0-dev.5) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **poco-launcher:** fix uninstall, status bar scrim, nav mode label, and expand home grids ([05dae64](https://github.com/rimixyz/morphe-patches/commit/05dae64ddda529002f2753e9ef6c8fa35f08076e))
+
 ## [1.9.0-dev.4](https://github.com/rimixyz/morphe-patches/compare/v1.9.0-dev.3...v1.9.0-dev.4) (2026-11-26)
 
 ### 🐛 Bug Fixes
